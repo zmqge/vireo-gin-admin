@@ -1,0 +1,75 @@
+package services
+
+import (
+    "errors"
+    "{{.Module}}/{{.RelPath}}/models"
+    "{{.Module}}/{{.RelPath}}/repositories"
+    "github.com/gin-gonic/gin"
+)
+
+// {{.Entity}}Service {{.Entity}}服务接口
+type {{.Entity}}Service interface {
+    Get{{.Entity}}ByID(ctx *gin.Context,id uint) (*models.{{.Entity}}Model, error) // 使用uint类型
+    List{{.Entity}}s(ctx *gin.Context,) ([]*models.{{.Entity}}Model, error)
+    Create{{.Entity}}(ctx *gin.Context,entity *models.{{.Entity}}Model) error
+    Update{{.Entity}}(ctx *gin.Context,entity *models.{{.Entity}}Model) error
+    Delete{{.Entity}}(ctx *gin.Context,id uint) error // 使用uint类型
+	Page{{.Entity}}s(ctx *gin.Context,keywords string, pageNum, pageSize int) ([]*models.{{.Entity}}Model, int64, error)
+	Get{{.Entity}}Form(ctx *gin.Context,id uint) (*models.{{.Entity}}Model, error)    // 使用uint类型
+}
+
+// {{.Entity}}ServiceImpl {{.Entity}}服务实现
+type {{.Entity}}ServiceImpl struct {
+    repo repositories.{{.Entity}}Repository
+}
+
+// New{{.Entity}}Service 创建{{.Entity}}服务
+func New{{.Entity}}Service(repo repositories.{{.Entity}}Repository) {{.Entity}}Service {
+    return &{{.Entity}}ServiceImpl{repo: repo}
+}
+
+// Get{{.Entity}}ByID 根据ID获取{{.Entity}}
+func (s *{{.Entity}}ServiceImpl) Get{{.Entity}}ByID(ctx *gin.Context,id uint) (*models.{{.Entity}}Model, error) {
+    entity, err := s.repo.Get{{.Entity}}ByID(ctx,id)
+    if err != nil {
+        return nil, err
+    }
+    if entity == nil {
+        return nil, errors.New("{{.Entity}} not found")
+    }
+    return entity, nil
+}
+
+// List{{.Entity}}s 获取{{.Entity}}列表
+func (s *{{.Entity}}ServiceImpl) List{{.Entity}}s(ctx *gin.Context,) ([]*models.{{.Entity}}Model, error) {
+    return s.repo.List{{.Entity}}s(ctx,)
+}
+
+// Create{{.Entity}} 创建{{.Entity}}
+func (s *{{.Entity}}ServiceImpl) Create{{.Entity}}(ctx *gin.Context,entity *models.{{.Entity}}Model) error {
+    if entity.Name == "" {
+        return errors.New("name is required")
+    }
+    return s.repo.Create{{.Entity}}(ctx,entity)
+}
+
+// Update{{.Entity}} 更新{{.Entity}}
+func (s *{{.Entity}}ServiceImpl) Update{{.Entity}}(ctx *gin.Context,entity *models.{{.Entity}}Model) error {
+    if entity.Name == "" {
+        return errors.New("name is required")
+    }
+    return s.repo.Update{{.Entity}}(ctx,entity)
+}
+
+// Delete{{.Entity}} 删除{{.Entity}}
+func (s *{{.Entity}}ServiceImpl) Delete{{.Entity}}(ctx *gin.Context,id uint) error {
+    return s.repo.Delete{{.Entity}}(ctx,id)
+}
+// Page{{.Entity}}s 分页获取{{.Entity}}列表
+func (s *{{.Entity}}ServiceImpl) Page{{.Entity}}s(ctx *gin.Context,keywords string, pageNum, pageSize int) ([]*models.{{.Entity}}Model, int64, error) {
+    return s.repo.Page{{.Entity}}s(ctx,keywords, pageNum, pageSize)
+}
+// Get{{.Entity}}Form 表单
+func (s *{{.Entity}}ServiceImpl) Get{{.Entity}}Form(ctx *gin.Context,id uint) (*models.{{.Entity}}Model, error) {
+    return s.repo.Get{{.Entity}}ByID(ctx,id)
+}

@@ -1,0 +1,105 @@
+package repositories
+
+import (
+    "errors"
+    "context"
+    "{{.Module}}/{{.RelPath}}/models"
+    "{{.Module}}/pkg/scopes"
+    "github.com/gin-gonic/gin"
+    "gorm.io/gorm"
+)
+
+// {{.Entity}}Repository {{.Entity}}数据访问接口
+type {{.Entity}}Repository interface {
+    Get{{.Entity}}ByID(ctx *gin.Context,id uint) (*models.{{.Entity}}Model, error) // 使用uint类型
+    List{{.Entity}}s(ctx *gin.Context,) ([]*models.{{.Entity}}Model, error)
+    Create{{.Entity}}(ctx *gin.Context,entity *models.{{.Entity}}Model) error
+    Update{{.Entity}}(ctx *gin.Context,entity *models.{{.Entity}}Model) error
+    Delete{{.Entity}}(ctx *gin.Context,id uint) error // 使用uint类型
+	Page{{.Entity}}s(ctx *gin.Context,keywords string, pageNum, pageSize int) ([]*models.{{.Entity}}Model, int64, error)
+}
+
+// {{.Entity}}RepositoryImpl {{.Entity}}数据访问实现
+type {{.Entity}}RepositoryImpl struct {
+    db *gorm.DB
+}
+
+// New{{.Entity}}Repository 创建{{.Entity}}数据访问
+func New{{.Entity}}Repository(db *gorm.DB) {{.Entity}}Repository {
+    return &{{.Entity}}RepositoryImpl{db: db}
+}
+
+// Get{{.Entity}}ByID 根据ID获取{{.Entity}}
+func (r *{{.Entity}}RepositoryImpl) Get{{.Entity}}ByID(ctx *gin.Context,id uint) (*models.{{.Entity}}Model, error) {
+    var entity models.{{.Entity}}Model
+    if err := r.db.Scopes(scopes.DataPermissionScope(ctx)).
+    First(&entity, id).Error; err != nil { // GORM支持直接传递uint类型
+        if errors.Is(err, gorm.ErrRecordNotFound) {
+            return nil, nil
+        }
+        return nil, err
+    }
+    return &entity, nil
+}
+
+// List{{.Entity}}s 获取{{.Entity}}列表
+func (r *{{.Entity}}RepositoryImpl) List{{.Entity}}s(ctx *gin.Context,) ([]*models.{{.Entity}}Model, error) {
+    var entities []*models.{{.Entity}}Model
+    if err := r.db.Scopes(scopes.DataPermissionScope(ctx)).
+    Find(&entities).Error; err != nil {
+        return nil, err
+    }
+    return entities, nil
+}
+
+// Create{{.Entity}} 创建{{.Entity}}
+func (r *{{.Entity}}RepositoryImpl) Create{{.Entity}}(ctx *gin.Context,entity *models.{{.Entity}}Model) error {
+    return r.db.WithContext(context.WithValue(ctx.Request.Context(), "ginContext", ctx)).
+    Create(entity).Error
+}
+
+// Update{{.Entity}} 更新{{.Entity}}
+func (r *{{.Entity}}RepositoryImpl) Update{{.Entity}}(ctx *gin.Context,entity *models.{{.Entity}}Model) error {
+    result := r.db.Scopes(scopes.DataPermissionScope(ctx)).
+    Save(entity)
+    if result.Error != nil {
+        return result.Error
+    }
+    if result.RowsAffected == 0 {
+        return errors.New("{{.Entity}} not found")
+    }
+    return nil
+}
+
+// Delete{{.Entity}} 删除{{.Entity}}
+func (r *{{.Entity}}RepositoryImpl) Delete{{.Entity}}(ctx *gin.Context,id uint) error {
+    result := r.db.Scopes(scopes.DataPermissionScope(ctx)).
+    Delete(&models.{{.Entity}}Model{}, id) // GORM支持直接传递uint类型
+    if result.Error != nil {
+        return result.Error
+    }
+    if result.RowsAffected == 0 {
+        return errors.New("{{.Entity}} not found")
+    }
+    return nil
+}
+// Page{{.Entity}}s 分页获取{{.Entity}}列表
+func (r *{{.Entity}}RepositoryImpl) Page{{.Entity}}s(ctx *gin.Context,keywords string, pageNum, pageSize int) ([]*models.{{.Entity}}Model, int64, error) {
+    var entities []*models.{{.Entity}}Model
+    var total int64
+    // 构建查询条件
+    query := r.db.Scopes(scopes.DataPermissionScope(ctx)).
+    Model(&models.{{.Entity}}Model{})
+    if keywords != "" {
+        query = query.Where("name LIKE ?", "%"+keywords+"%")
+    }
+    // 计算总数
+    if err := query.Count(&total).Error; err!= nil {
+        return nil, 0, err
+    }
+    // 分页查询
+    if err := query.Offset((pageNum - 1) * pageSize).Limit(pageSize).Find(&entities).Error; err!= nil {
+        return nil, 0, err
+    }
+    return entities, total, nil
+}

@@ -1,0 +1,29 @@
+PORT: "8080"
+
+DATABASE:
+  HOST: "localhost"
+  PORT: "3306"
+  USER: "root"
+  PASSWORD: "123456"
+  NAME: "vireo_gin_admin"
+
+REDIS:
+  HOST: "localhost"
+  PORT: "6379"
+  PASSWORD: ""
+  DB: 0
+  TTL: 24h
+
+JWT:
+  ACCESS_SECRET: "dsgfs3q4354ergfdyhrt7eqefdfdtur8764w6rdf"
+  REFRESH_SECRET: "dsgfs3q4354erdfdsgfghdfsdsdsfa8764w6rdf"
+  ACCESS_EXPIRE: 1h
+  REFRESH_EXPIRE: 168h
+
+RBAC:
+  CacheTTL: 300  # 权限缓存时间（秒）
+  SuperAdminRole: "super_admin"  # 超级管理员角色名称
+
+controller_dirs:
+  - app/admin
+  # - app/test

@@ -1,0 +1,148 @@
+package controllers
+
+import (
+	"strconv"
+
+	"{{.Module}}/{{.RelPath}}/models"
+	"{{.Module}}/{{.RelPath}}/services"
+	"github.com/gin-gonic/gin"
+	"github.com/zmqge/vireo-gin-admin/pkg/response"
+)
+
+// {{.Entity}}Controller {{.Entity}}控制器
+// @Group(path="/api/v1/", name="{{.Entity}}管理")
+type {{.Entity}}Controller struct {
+	service services.{{.Entity}}Service
+}
+
+// New{{.Entity}}Controller 创建{{.Entity}}控制器
+func New{{.Entity}}Controller(service services.{{.Entity}}Service) *{{.Entity}}Controller {
+	return &{{.Entity}}Controller{service: service}
+}
+
+// get{{.Entity}} 获取单个{{.Entity}}
+// @Route(method=GET, path="/{{.EntityPath}}/:id", middlewares=["jwt","dataperm"])
+// @Permission(code="sys:{{.EntityPermission}}:view", name="{{.Entity}}详情",modules="{{.Entity}}管理", desc="查看{{.Entity}}详情")
+func (c *{{.Entity}}Controller) Get{{.Entity}}Details(ctx *gin.Context) {
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "Invalid ID")
+		return
+	}
+	
+	entity, err := c.service.Get{{.Entity}}ByID(ctx,uint(id))
+	if err != nil {
+		response.Error(ctx, err)
+		return
+	}
+	response.Success(ctx, entity)
+}
+
+// list{{.Entity}}s 获取{{.Entity}}分页列表
+// @Route(method=GET, path="/{{.EntityPath}}/page", middlewares=["jwt","dataperm"])
+// @Permission(code="sys:{{.EntityPermission}}:query",name="{{.Entity}}列表",modules="{{.Entity}}管理", desc="查看{{.Entity}}列表")
+func (c *{{.Entity}}Controller) List{{.Entity}}s(ctx *gin.Context) {
+keywords := ctx.Query("keywords")
+	pageNumStr := ctx.DefaultQuery("pageNum", "1")
+	pageSizeStr := ctx.DefaultQuery("pageSize", "10")
+	pageNum, _ := strconv.Atoi(pageNumStr)
+	pageSize, _ := strconv.Atoi(pageSizeStr)
+	if pageNum < 1 {
+		pageNum = 1
+	}
+	if pageSize < 1 {
+		pageSize = 10
+	}
+
+	list, total, err := c.service.Page{{.Entity}}s(ctx,keywords, pageNum, pageSize)
+	if err != nil {
+		response.Error(ctx, err)
+		return
+	}
+	resp := map[string]interface{}{
+		"list":  list,
+		"total": total,
+	}
+	response.Success(ctx, resp)
+}
+
+// create{{.Entity}} 创建{{.Entity}}
+// @Route(method=POST, path="/{{.EntityPath}}", middlewares=["jwt"])
+// @Permission(code="sys:{{.EntityPermission}}:add",name="新建{{.Entity}}",modules="{{.Entity}}管理", desc="创建{{.Entity}}")
+func (c *{{.Entity}}Controller) Create{{.Entity}}(ctx *gin.Context) {
+	var entity models.{{.Entity}}Model
+	if err := ctx.ShouldBindJSON(&entity); err != nil {
+		response.BadRequest(ctx, "Invalid request body")
+		return
+	}
+	err := c.service.Create{{.Entity}}(ctx,&entity)
+	if err != nil {
+		response.Error(ctx, err)
+		return
+	}
+	response.Success(ctx, entity)
+}
+
+// update{{.Entity}} 更新{{.Entity}}
+// @Route(method=PUT, path="/{{.EntityPath}}/:id", middlewares=["jwt","dataperm"])
+// @Permission(code="sys:{{.EntityPermission}}:update",name="更新{{.Entity}}",modules="{{.Entity}}管理", desc="更新{{.Entity}}")
+func (c *{{.Entity}}Controller) Update{{.Entity}}(ctx *gin.Context) {
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "Invalid ID")
+		return
+	}
+	
+	var entity models.{{.Entity}}Model
+	if err := ctx.ShouldBindJSON(&entity); err != nil {
+		response.BadRequest(ctx, "Invalid request body")
+		return
+	}
+	entity.ID = uint(id)
+	err = c.service.Update{{.Entity}}(ctx,&entity)
+	if err != nil {
+		response.Error(ctx, err)
+		return
+	}
+	response.Success(ctx, entity)
+}
+
+// delete{{.Entity}} 删除{{.Entity}}
+// @Route(method=DELETE, path="/{{.EntityPath}}/:id", middlewares=["jwt"])
+// @Permission(code="sys:{{.EntityPermission}}:delete",name="删除{{.Entity}}",modules="{{.Entity}}管理", desc="删除{{.Entity}}")
+func (c *{{.Entity}}Controller) Delete{{.Entity}}(ctx *gin.Context) {
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "Invalid ID")
+		return
+	}
+	
+	err = c.service.Delete{{.Entity}}(ctx,uint(id))
+	if err != nil {
+		response.Error(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
+}
+
+// getDict 获取{{.Entity}}表单
+// @Route(method=GET, path="/{{.EntityPath}}/:id/form", middlewares=["jwt","dataperm"])
+// @Permission(code="sys:{{.EntityPermission}}:details",name="{{.Entity}}详情",modules="{{.Entity}}管理", desc="查看{{.Entity}}详情")
+func (c *{{.Entity}}Controller) Get{{.Entity}}Form(ctx *gin.Context) {
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "Invalid ID")
+		return
+	}
+	entity, err := c.service.Get{{.Entity}}ByID(ctx,uint(id))
+
+	if err != nil {
+		response.Error(ctx, err)
+		return
+	}
+	response.Success(ctx, entity)
+}

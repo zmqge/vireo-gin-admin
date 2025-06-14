@@ -1,0 +1,570 @@
+package main
+
+import (
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/viper"
+	"github.com/zmqge/vireo-gin-admin/pkg/annotations"
+)
+
+type ControllerFolderInfo struct {
+	ImportPath    string
+	ControllerMap map[string]bool
+}
+
+func (info *ControllerFolderInfo) ControllerTypes() []string {
+	types := make([]string, 0, len(info.ControllerMap))
+	for t := range info.ControllerMap {
+		types = append(types, t)
+	}
+	return types
+}
+
+func main() {
+	if err := initConfig(); err != nil {
+		fmt.Printf("Error initializing config: %v\n", err)
+		return
+	}
+
+	controllerDirs := getControllerDirs()
+	fmt.Println("Controller directories to scan:", controllerDirs)
+
+	// 检查每个 controllerDirs 路径是否存在，不存在的直接跳过
+	var validDirs []string
+	for _, dir := range controllerDirs {
+		if stat, err := os.Stat(dir); err == nil && stat.IsDir() {
+			validDirs = append(validDirs, dir)
+		} else {
+			fmt.Printf("警告: 配置的 controller_dir %s 不存在，已跳过\n", dir)
+		}
+	}
+
+	// 先删除 routes 目录下所有 -api.go 路由文件
+	if err := cleanApiRouteFiles(); err != nil {
+		fmt.Printf("Error cleaning old route files: %v\n", err)
+	}
+
+	if err := generateRoutes(validDirs); err != nil {
+		fmt.Printf("Error generating routes: %v\n", err)
+	}
+
+	// 生成 routes/route.go 统一导入注册
+	if err := generateRouteEntry(); err != nil {
+		fmt.Printf("Error generating route.go: %v\n", err)
+	}
+}
+
+// 删除 routes 目录下所有 -api.go 路由文件
+func cleanApiRouteFiles() error {
+	dir := "routes"
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	for _, file := range files {
+		if strings.HasSuffix(file.Name(), "-api.go") {
+			if err := os.Remove(filepath.Join(dir, file.Name())); err != nil {
+				fmt.Printf("删除旧路由文件失败: %s, err: %v\n", file.Name(), err)
+			}
+		}
+	}
+	return nil
+}
+
+// 生成 routes/route.go 统一注册所有 RegisterXXXRoutes
+func generateRouteEntry() error {
+	dir := "routes"
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	var importStmts []string
+	var callStmts []string
+	for _, file := range files {
+		if !strings.HasSuffix(file.Name(), "-api.go") {
+			continue
+		}
+		base := strings.TrimSuffix(file.Name(), "-api.go")
+		importStmts = append(importStmts, fmt.Sprintf("\t\"github.com/zmqge/vireo-gin-admin/routes/%s-api\"", base))
+		funcName := fmt.Sprintf("Register%sRoutes", strings.Title(base))
+		callStmts = append(callStmts, fmt.Sprintf("\t%s(engine, db)", funcName))
+	}
+	content := "package routes\n\nimport (\n\t\"github.com/gin-gonic/gin\"\n\t\"gorm.io/gorm\"\n" + "\n)\n\nfunc RegisterAllRoutes(engine *gin.Engine, db *gorm.DB) {\n" + strings.Join(callStmts, "\n") + "\n}\n"
+	return os.WriteFile(filepath.Join(dir, "route.go"), []byte(content), 0644)
+}
+
+func initConfig() error {
+	viper.SetConfigName("config")
+	viper.SetConfigType("yaml")
+	viper.AddConfigPath(".")
+	viper.AddConfigPath("./config")
+	return viper.ReadInConfig()
+}
+
+func getControllerDirs() []string {
+	if dirs := viper.GetStringSlice("controller_dirs"); len(dirs) > 0 {
+		return dirs
+	}
+	return []string{"app/admin"}
+}
+
+func generateRoutes(controllerDirs []string) error {
+	for _, dir := range controllerDirs {
+		controllersDir := filepath.Join(dir, "controllers")
+		if stat, err := os.Stat(controllersDir); err == nil && stat.IsDir() {
+			dir = controllersDir
+		}
+
+		var routes []annotations.RouteMeta
+		folderInfos := make(map[string]*ControllerFolderInfo)
+
+		if err := scanControllerDir(dir, &routes, folderInfos); err != nil {
+			return err
+		}
+
+		var folderInfo *ControllerFolderInfo
+		for _, info := range folderInfos {
+			folderInfo = info
+			break
+		}
+		if folderInfo == nil {
+			return fmt.Errorf("no controller info found for dir: %s", dir)
+		}
+
+		fmt.Printf("扫描目录 %s 完成，找到 %d 个路由\n", dir, len(routes))
+		if len(routes) == 0 {
+			fmt.Printf("警告: 在 %s 中未找到任何路由\n", dir)
+			continue
+		}
+
+		if err := os.MkdirAll("routes", 0755); err != nil {
+			return fmt.Errorf("创建routes目录失败: %v", err)
+		}
+
+		code := renderRouteFile(routes, folderInfo)
+		apiFile := genApiFileName(dir)
+		fmt.Printf("正在生成路由文件: %s\n", apiFile)
+		if err := os.WriteFile(apiFile, []byte(code), 0644); err != nil {
+			return fmt.Errorf("写入路由文件失败: %v", err)
+		}
+		fmt.Printf("成功生成路由文件: %s\n", apiFile)
+	}
+	return nil
+}
+
+func genApiFileName(dir string) string {
+	base := filepath.Base(dir)
+	if base == "controllers" {
+		base = filepath.Base(filepath.Dir(dir))
+	}
+	return fmt.Sprintf("routes/%s-api.go", base)
+}
+
+func scanControllerDir(dir string, routes *[]annotations.RouteMeta, folderInfos map[string]*ControllerFolderInfo) error {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("error reading directory %s: %v", dir, err)
+	}
+
+	for _, file := range files {
+		if file.IsDir() || !strings.HasSuffix(file.Name(), ".go") || strings.HasSuffix(file.Name(), "_test.go") {
+			continue
+		}
+
+		filePath := filepath.Join(dir, file.Name())
+		if err := processControllerFile(filePath, routes, folderInfos); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func processControllerFile(path string, routes *[]annotations.RouteMeta, folderInfos map[string]*ControllerFolderInfo) error {
+	fileRoutes, _, currentGroupMeta, err := annotations.ParseRouteAndPermission(path)
+	if err != nil {
+		return fmt.Errorf("error parsing file %s: %v", path, err)
+	}
+
+	controllerType := getControllerType(path)
+	if controllerType == "" {
+		return fmt.Errorf("no controller type found in file %s", path)
+	}
+
+	importPath, err := filepath.Rel(".", filepath.Dir(path))
+	if err != nil {
+		return fmt.Errorf("error getting relative path for %s: %v", path, err)
+	}
+	importPath = filepath.ToSlash(importPath)
+	if _, exists := folderInfos[importPath]; !exists {
+		folderInfos[importPath] = &ControllerFolderInfo{
+			ImportPath:    importPath,
+			ControllerMap: make(map[string]bool),
+		}
+	}
+	folderInfos[importPath].ControllerMap[controllerType] = true
+
+	for _, route := range fileRoutes {
+		route.ControllerType = controllerType
+		route.ImportPath = importPath
+		route.FilePath = path
+		if currentGroupMeta != nil {
+			if groupMeta, exists := currentGroupMeta[controllerType]; exists {
+				route.GroupMeta = groupMeta
+			}
+		}
+		*routes = append(*routes, route)
+	}
+
+	return nil
+}
+
+func getControllerType(filePath string) string {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	if err != nil {
+		fmt.Printf("Error parsing file %s: %v\n", filePath, err)
+		return ""
+	}
+
+	for _, decl := range node.Decls {
+		if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
+			for _, spec := range genDecl.Specs {
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+					return typeSpec.Name.Name
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func renderRouteFile(routes []annotations.RouteMeta, folderInfo *ControllerFolderInfo) string {
+	var builder strings.Builder
+	baseDir := filepath.Dir(folderInfo.ImportPath)
+	packageName := filepath.Base(baseDir)
+
+	// 生成包声明和导入
+	builder.WriteString("package routes\n\n")
+	builder.WriteString("import (\n")
+	builder.WriteString("\t\"github.com/gin-gonic/gin\"\n")
+	builder.WriteString("\t\"github.com/zmqge/vireo-gin-admin/pkg/middleware\"\n")
+	builder.WriteString("\t\"gorm.io/gorm\"\n")
+
+	// 智能生成导入路径
+	importBase := "github.com/zmqge/vireo-gin-admin/" + filepath.ToSlash(folderInfo.ImportPath)
+	if strings.HasSuffix(folderInfo.ImportPath, "/controllers") {
+		builder.WriteString(fmt.Sprintf("\t\"%s\"\n", importBase))
+		builder.WriteString(fmt.Sprintf("\t\"%s\"\n", strings.Replace(importBase, "/controllers", "/services", 1)))
+		builder.WriteString(fmt.Sprintf("\t\"%s\"\n", strings.Replace(importBase, "/controllers", "/repositories", 1)))
+	} else {
+		builder.WriteString(fmt.Sprintf("\t\"%s/controllers\"\n", importBase))
+		builder.WriteString(fmt.Sprintf("\t\"%s/services\"\n", importBase))
+		builder.WriteString(fmt.Sprintf("\t\"%s/repositories\"\n", importBase))
+	}
+	builder.WriteString(")\n\n")
+
+	// 生成路由注册函数
+	funcName := fmt.Sprintf("Register%sRoutes", strings.Title(packageName))
+	builder.WriteString(fmt.Sprintf("func %s(engine *gin.Engine, db *gorm.DB) {\n", funcName))
+
+	// 实例化所有控制器及其依赖
+	ctrlInstances := instantiateControllers(routes, folderInfo, &builder)
+
+	// 检查权限但未加jwt的路由，自动加jwt并收集warning
+	var warnRoutes []string
+	for i, route := range routes {
+		if route.Permission != "" {
+			foundJwt := false
+			for _, m := range route.Middlewares {
+				if strings.EqualFold(m, "jwt") {
+					foundJwt = true
+					break
+				}
+			}
+			if !foundJwt {
+				// 自动加上 jwt
+				routes[i].Middlewares = append([]string{"jwt"}, routes[i].Middlewares...)
+				warnRoutes = append(warnRoutes, fmt.Sprintf("[WARNING] 路由 %s %s (文件: %s, 控制器: %s, 方法: %s) 设置了权限 '%s' 但未定义 jwt 中间件，已自动加上 jwt，建议显式声明！", route.Method, route.Path, route.FilePath, route.ControllerType, route.HandlerName, route.Permission))
+			}
+		}
+	}
+
+	// 构建并渲染路由树
+	groupTree := buildGroupTree(routes)
+	renderGroupTree(&builder, groupTree, "engine", ctrlInstances)
+
+	builder.WriteString("}\n")
+
+	// 输出warning到控制台
+	if len(warnRoutes) > 0 {
+		fmt.Println("\n================ 路由权限警告 ================")
+		for _, w := range warnRoutes {
+			fmt.Println(w)
+		}
+		fmt.Println("============================================\n")
+	}
+
+	return builder.String()
+}
+
+func buildMiddlewares(route annotations.RouteMeta) string {
+	var middlewares []string
+	for _, m := range route.Middlewares {
+		if m != "" && strings.ToUpper(m) != "RBAC" {
+			middlewares = append(middlewares, fmt.Sprintf("middleware.%s()", strings.ToUpper(m)))
+		}
+	}
+	if route.Permission != "" {
+		middlewares = append(middlewares, fmt.Sprintf("middleware.RBAC(\"%s\")", route.Permission))
+	}
+	if len(middlewares) == 0 {
+		return ""
+	}
+	return strings.Join(middlewares, ", ")
+}
+
+func buildGroupTree(routes []annotations.RouteMeta) map[string][]annotations.RouteMeta {
+	groupMap := make(map[string][]annotations.RouteMeta)
+	for _, route := range routes {
+		groupPath := "/"
+		if route.GroupMeta != nil && route.GroupMeta.Path != "" {
+			groupPath = route.GroupMeta.Path
+		}
+		// 规范化分组路径
+		if groupPath != "/" {
+			groupPath = strings.TrimRight(groupPath, "/")
+		}
+		groupMap[groupPath] = append(groupMap[groupPath], route)
+	}
+	return groupMap
+}
+
+func renderGroupTree(builder *strings.Builder, groupTree map[string][]annotations.RouteMeta, engineVar string, ctrlInstances map[string]string) {
+	groupVars := make(map[string]string)
+
+	for groupPath, groupRoutes := range groupTree {
+		if groupPath == "/" {
+			// 处理根路径路由
+			for _, route := range groupRoutes {
+				registerRoute(builder, engineVar, route, ctrlInstances)
+			}
+		} else {
+			// 处理分组路由
+			groupVar := "group" + strings.ReplaceAll(strings.Trim(groupPath, "/"), "/", "_")
+			if _, exists := groupVars[groupPath]; !exists {
+				builder.WriteString(fmt.Sprintf("\t%s := %s.Group(\"%s\")\n", groupVar, engineVar, groupPath))
+				groupVars[groupPath] = groupVar
+				builder.WriteString("\t{\n")
+			}
+
+			for _, route := range groupRoutes {
+				registerRoute(builder, groupVar, route, ctrlInstances)
+			}
+
+			if _, exists := groupVars[groupPath]; exists {
+				builder.WriteString("\t}\n")
+			}
+		}
+	}
+}
+
+func registerRoute(builder *strings.Builder, groupVar string, route annotations.RouteMeta, ctrlInstances map[string]string) {
+	ctrlVar, exists := ctrlInstances[route.ControllerType]
+	if !exists {
+		builder.WriteString(fmt.Sprintf("\t// 警告: 控制器 %s 未实例化，跳过路由 %s %s\n",
+			route.ControllerType, route.Method, route.Path))
+		return
+	}
+
+	middlewares := buildMiddlewares(route)
+	path := route.Path
+	if groupVar != "engine" {
+		path = strings.TrimPrefix(route.Path, route.GroupMeta.Path)
+		if path == "" {
+			path = "/"
+		}
+	}
+
+	if middlewares != "" {
+		builder.WriteString(fmt.Sprintf("\t%s.%s(\"%s\", %s, %s.%s)\n",
+			groupVar, route.Method, path, middlewares, ctrlVar, route.HandlerName))
+	} else {
+		builder.WriteString(fmt.Sprintf("\t%s.%s(\"%s\", %s.%s)\n",
+			groupVar, route.Method, path, ctrlVar, route.HandlerName))
+	}
+}
+
+func instantiateControllers(routes []annotations.RouteMeta, folderInfo *ControllerFolderInfo, builder *strings.Builder) map[string]string {
+	ctrlInstances := make(map[string]string)
+	repoVars := make(map[string]string)
+	serviceVars := make(map[string]string)
+
+	// 收集所有需要实例化的控制器类型
+	ctrlTypes := make(map[string]bool)
+	for _, route := range routes {
+		ctrlTypes[route.ControllerType] = true
+	}
+
+	// 实例化所有控制器及其依赖
+	for ctrlType := range ctrlTypes {
+		filePath := findControllerFile(routes, ctrlType)
+		if filePath == "" {
+			builder.WriteString(fmt.Sprintf("\t// 警告: 未找到控制器 %s 的源文件\n", ctrlType))
+			continue
+		}
+
+		params, err := getControllerConstructorParams(filePath, ctrlType)
+		if err != nil {
+			builder.WriteString(fmt.Sprintf("\t// 警告: 无法获取控制器 %s 的构造参数: %v\n", ctrlType, err))
+			continue
+		}
+
+		ctrlVar := strings.ToLower(ctrlType[:1]) + ctrlType[1:]
+		ctrlInstances[ctrlType] = ctrlVar
+
+		// 处理构造函数参数
+		var args []string
+		for _, param := range params {
+			switch {
+			case param == "*gorm.DB":
+				args = append(args, "db")
+
+			case strings.HasPrefix(param, "*services.") || strings.HasPrefix(param, "services."):
+				svcName := strings.TrimPrefix(strings.TrimPrefix(param, "*"), "services.")
+				svcVar := strings.ToLower(svcName[:1]) + svcName[1:]
+
+				if _, exists := serviceVars[svcName]; !exists {
+					// 实例化服务及其依赖
+					args := instantiateService(svcName, folderInfo.ImportPath, builder, repoVars, serviceVars)
+					builder.WriteString(fmt.Sprintf("\t%s := services.New%s(%s)\n", svcVar, svcName, strings.Join(args, ", ")))
+					serviceVars[svcName] = svcVar
+				}
+				args = append(args, serviceVars[svcName])
+
+			case strings.HasPrefix(param, "*repositories.") || strings.HasPrefix(param, "repositories."):
+				repoName := strings.TrimPrefix(strings.TrimPrefix(param, "*"), "repositories.")
+				repoVar := strings.ToLower(repoName[:1]) + repoName[1:]
+
+				if _, exists := repoVars[repoName]; !exists {
+					builder.WriteString(fmt.Sprintf("\t%s := repositories.New%s(db)\n", repoVar, repoName))
+					repoVars[repoName] = repoVar
+				}
+				args = append(args, repoVar)
+			}
+		}
+
+		// 实例化控制器
+		builder.WriteString(fmt.Sprintf("\t%s := controllers.New%s(%s)\n",
+			ctrlVar, ctrlType, strings.Join(args, ", ")))
+	}
+
+	return ctrlInstances
+}
+
+func instantiateService(serviceName, importPath string, builder *strings.Builder, repoVars, serviceVars map[string]string) []string {
+	params, err := getServiceConstructorParams(serviceName, importPath)
+	if err != nil {
+		builder.WriteString(fmt.Sprintf("\t// 警告: 无法获取服务 %s 的构造参数: %v\n", serviceName, err))
+		return nil
+	}
+
+	var args []string
+	for _, param := range params {
+		switch {
+		case strings.HasPrefix(param, "*repositories.") || strings.HasPrefix(param, "repositories."):
+			repoName := strings.TrimPrefix(strings.TrimPrefix(param, "*"), "repositories.")
+			repoVar := strings.ToLower(repoName[:1]) + repoName[1:]
+
+			if _, exists := repoVars[repoName]; !exists {
+				builder.WriteString(fmt.Sprintf("\t%s := repositories.New%s(db)\n", repoVar, repoName))
+				repoVars[repoName] = repoVar
+			}
+			args = append(args, repoVar)
+
+		case strings.HasPrefix(param, "*services.") || strings.HasPrefix(param, "services."):
+			subSvcName := strings.TrimPrefix(strings.TrimPrefix(param, "*"), "services.")
+			subSvcVar := strings.ToLower(subSvcName[:1]) + subSvcName[1:]
+
+			if _, exists := serviceVars[subSvcName]; !exists {
+				subArgs := instantiateService(subSvcName, importPath, builder, repoVars, serviceVars)
+				builder.WriteString(fmt.Sprintf("\t%s := services.New%s(%s)\n", subSvcVar, subSvcName, strings.Join(subArgs, ", ")))
+				serviceVars[subSvcName] = subSvcVar
+			}
+			args = append(args, serviceVars[subSvcName])
+
+		case param == "*gorm.DB":
+			args = append(args, "db")
+		}
+	}
+	return args
+}
+
+func findControllerFile(routes []annotations.RouteMeta, ctrlType string) string {
+	for _, route := range routes {
+		if route.ControllerType == ctrlType {
+			return route.FilePath
+		}
+	}
+	return ""
+}
+
+func getControllerConstructorParams(filePath, controllerType string) ([]string, error) {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, filePath, nil, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+	constructorName := "New" + controllerType
+	for _, decl := range node.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == constructorName {
+			var params []string
+			for _, param := range fn.Type.Params.List {
+				typeStr := exprToString(param.Type)
+				params = append(params, typeStr)
+			}
+			return params, nil
+		}
+	}
+	return nil, fmt.Errorf("constructor not found")
+}
+
+func getServiceConstructorParams(serviceType, importPath string) ([]string, error) {
+	baseDir := filepath.Dir(importPath)
+	serviceFile := filepath.Join(baseDir, "services", strings.ToLower(serviceType)+".go")
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, serviceFile, nil, parser.ParseComments)
+	if err != nil {
+		return nil, err
+	}
+	constructorName := "New" + serviceType
+	for _, decl := range node.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == constructorName {
+			var params []string
+			for _, param := range fn.Type.Params.List {
+				typeStr := exprToString(param.Type)
+				params = append(params, typeStr)
+			}
+			return params, nil
+		}
+	}
+	return nil, fmt.Errorf("constructor not found for %s", serviceType)
+}
+
+func exprToString(expr ast.Expr) string {
+	switch t := expr.(type) {
+	case *ast.StarExpr:
+		return "*" + exprToString(t.X)
+	case *ast.SelectorExpr:
+		return exprToString(t.X) + "." + t.Sel.Name
+	case *ast.Ident:
+		return t.Name
+	default:
+		return ""
+	}
+}
