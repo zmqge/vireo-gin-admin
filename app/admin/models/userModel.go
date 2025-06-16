@@ -13,8 +13,8 @@ type User struct {
 	gorm.Model
 	ID       uint   `json:"id"`
 	Username string `json:"username"`
-	Password string `json:"password"`
-	Salt     string `json:"salt"`
+	Password string `json:"-"`
+	Salt     string `json:"-"`
 	Status   int    `json:"status"`
 	Avatar   string `json:"avatar"`
 	Nickname string `json:"nickname"`

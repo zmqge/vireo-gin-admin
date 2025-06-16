@@ -10,6 +10,13 @@ import (
 )
 
 func RegisterAdminRoutes(engine *gin.Engine, db *gorm.DB) {
+	deptController := controllers.NewDeptController(db)
+	menuController := controllers.NewMenuController(db)
+	noticeReceiverRepository := repositories.NewNoticeReceiverRepository(db)
+	noticeReceiverService := services.NewNoticeReceiverService(noticeReceiverRepository)
+	noticeReceiverController := controllers.NewNoticeReceiverController(noticeReceiverService)
+	permissionController := controllers.NewPermissionController()
+	roleController := controllers.NewRoleController(db)
 	userService := services.NewUserService(db)
 	tokenService := services.NewTokenService()
 	authController := controllers.NewAuthController(userService, tokenService)
@@ -19,25 +26,11 @@ func RegisterAdminRoutes(engine *gin.Engine, db *gorm.DB) {
 	dictRepository := repositories.NewDictRepository(db)
 	dictService := services.NewDictService(dictRepository)
 	dictController := controllers.NewDictController(dictService)
-	noticeReceiverRepository := repositories.NewNoticeReceiverRepository(db)
-	noticeReceiverService := services.NewNoticeReceiverService(noticeReceiverRepository)
-	noticeReceiverController := controllers.NewNoticeReceiverController(noticeReceiverService)
-	permissionController := controllers.NewPermissionController()
-	roleController := controllers.NewRoleController(db)
-	deptController := controllers.NewDeptController(db)
-	menuController := controllers.NewMenuController(db)
 	noticesRepository := repositories.NewNoticesRepository(db)
 	userRepository := repositories.NewUserRepository(db)
 	noticesService := services.NewNoticesService(noticesRepository, userRepository, noticeReceiverRepository)
 	noticesController := controllers.NewNoticesController(noticesService)
 	userController := controllers.NewUserController(userService)
-	groupapi_v1_auth := engine.Group("/api/v1/auth")
-	{
-	groupapi_v1_auth.POST("/login", authController.Login)
-	groupapi_v1_auth.GET("/captcha", authController.GetCaptcha)
-	groupapi_v1_auth.DELETE("/logout", middleware.JWT(), authController.Logout)
-	groupapi_v1_auth.POST("/refresh-token", authController.RefreshToken)
-	}
 	groupapi_v1 := engine.Group("/api/v1")
 	{
 	groupapi_v1.GET("/config/:id", middleware.JWT(), middleware.RBAC("sys:config:view"), middleware.DATAPERM(), configController.GetConfigDetails)
@@ -77,6 +70,7 @@ func RegisterAdminRoutes(engine *gin.Engine, db *gorm.DB) {
 	groupapi_v1.DELETE("/noticereceiver/:id", middleware.JWT(), middleware.RBAC("sys:noticereceiver:delete"), noticeReceiverController.DeleteNoticeReceiver)
 	groupapi_v1.GET("/noticereceiver/:id/form", middleware.JWT(), middleware.RBAC("sys:noticereceiver:details"), middleware.DATAPERM(), noticeReceiverController.GetNoticeReceiverForm)
 	groupapi_v1.GET("/notices/:id/detail", middleware.JWT(), middleware.RBAC("sys:notice:detail"), middleware.DATAPERM(), noticesController.GetNoticesDetails)
+	groupapi_v1.GET("/notices/:id/my-detail", middleware.JWT(), middleware.RBAC("sys:notice:my-detail"), noticesController.GetMyNoticesDetails)
 	groupapi_v1.GET("/notices/page", middleware.JWT(), middleware.RBAC("sys:notice:query"), middleware.DATAPERM(), noticesController.ListNoticess)
 	groupapi_v1.POST("/notices", middleware.JWT(), middleware.RBAC("sys:notice:add"), noticesController.CreateNotices)
 	groupapi_v1.PUT("/notices/:id", middleware.JWT(), middleware.RBAC("sys:notice:update"), middleware.DATAPERM(), noticesController.UpdateNotices)
@@ -85,6 +79,7 @@ func RegisterAdminRoutes(engine *gin.Engine, db *gorm.DB) {
 	groupapi_v1.PUT("/notices/:id/revoke", middleware.JWT(), middleware.RBAC("sys:notice:revoke"), noticesController.RevokeNotice)
 	groupapi_v1.PUT("/notices/:id/publish", middleware.JWT(), middleware.RBAC("sys:notice:publish"), noticesController.PublishNotice)
 	groupapi_v1.GET("/notices/my-page", middleware.JWT(), middleware.RBAC("sys:notice:mynotice"), middleware.DATAPERM(), noticesController.GetMyNoticess)
+	groupapi_v1.PUT("/notices/my-page/read-all", middleware.JWT(), middleware.RBAC("sys:notice:read-all"), noticesController.MarkAllAsRead)
 	groupapi_v1.GET("/perms/options", middleware.JWT(), middleware.RBAC("sys:perm:options"), permissionController.ListPermOptions)
 	groupapi_v1.POST("/roles", middleware.JWT(), middleware.RBAC("sys:role:add"), roleController.Create)
 	groupapi_v1.PUT("/roles/:id", middleware.JWT(), middleware.RBAC("sys:role:edit"), roleController.UpdateRole)
@@ -107,5 +102,12 @@ func RegisterAdminRoutes(engine *gin.Engine, db *gorm.DB) {
 	groupapi_v1.PUT("/users/password", middleware.JWT(), middleware.RBAC("sys:user:change-password"), userController.ChangePassword)
 	groupapi_v1.PUT("/users/profile", middleware.JWT(), middleware.RBAC("sys:user:update-profile"), userController.UpdateMyProfile)
 	groupapi_v1.GET("/users/options", middleware.JWT(), middleware.RBAC("sys:user:options"), middleware.DATAPERM(), userController.ListUserOptions)
+	}
+	groupapi_v1_auth := engine.Group("/api/v1/auth")
+	{
+	groupapi_v1_auth.POST("/login", authController.Login)
+	groupapi_v1_auth.GET("/captcha", authController.GetCaptcha)
+	groupapi_v1_auth.DELETE("/logout", middleware.JWT(), authController.Logout)
+	groupapi_v1_auth.POST("/refresh-token", authController.RefreshToken)
 	}
 }

@@ -40,6 +40,27 @@ func (c *NoticesController) GetNoticesDetails(ctx *gin.Context) {
 	response.Success(ctx, entity)
 }
 
+// getMyNotices
+// @Route(method=GET, path="/notices/:id/my-detail", middlewares=["jwt"])
+// @Permission(code="sys:notice:my-detail", name="我的Notices详情",modules="Notices管理", desc="查看我的Notices详情")
+func (c *NoticesController) GetMyNoticesDetails(ctx *gin.Context) {
+	idStr := ctx.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "Invalid ID")
+		return
+	}
+	userIDstr := ctx.GetString("userID")
+	userID, _ := utils.ParseUintID(userIDstr)
+
+	entity, err := c.service.GetMyNoticesByID(ctx, userID, uint(id))
+	if err != nil {
+		response.Error(ctx, err)
+		return
+	}
+	response.Success(ctx, entity)
+}
+
 // listNoticess 获取Notices分页列表
 // @Route(method=GET, path="/notices/page", middlewares=["jwt","dataperm"])
 // @Permission(code="sys:notice:query",name="Notices列表",modules="Notices管理", desc="查看Notices列表")
@@ -190,7 +211,6 @@ func (c *NoticesController) PublishNotice(ctx *gin.Context) {
 // @Permission(code="sys:notice:mynotice",name="我的公告列表",modules="Notices管理", desc="查看我的列表")
 func (c *NoticesController) GetMyNoticess(ctx *gin.Context) {
 	keywords := ctx.Query("keywords")
-	publishStatus := ctx.Query("publishStatus")
 	pageNumStr := ctx.DefaultQuery("pageNum", "1")
 	pageSizeStr := ctx.DefaultQuery("pageSize", "10")
 	pageNum, _ := strconv.Atoi(pageNumStr)
@@ -201,8 +221,23 @@ func (c *NoticesController) GetMyNoticess(ctx *gin.Context) {
 	if pageSize < 1 {
 		pageSize = 10
 	}
+	userIDStr := ctx.GetString("userID")
+	userID, err := strconv.ParseUint(userIDStr, 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "Invalid userID")
+		return
+	}
 
-	list, total, err := c.service.PageNotices(ctx, keywords, publishStatus, pageNum, pageSize)
+	// 获取 isRead 参数，若未传参则默认为空字符串
+	isReadStr := ctx.DefaultQuery("isRead", "3")
+
+	isRead, err := strconv.ParseUint(isReadStr, 10, 64)
+	if err != nil {
+		response.BadRequest(ctx, "Invalid isRead")
+		return
+	}
+
+	list, total, err := c.service.MyPageNotices(ctx, uint(userID), keywords, uint(isRead), pageNum, pageSize)
 	if err != nil {
 		response.Error(ctx, err)
 		return
@@ -212,4 +247,22 @@ func (c *NoticesController) GetMyNoticess(ctx *gin.Context) {
 		"total": total,
 	}
 	response.Success(ctx, resp)
+}
+
+// MarkAllAsRead 标记全部为已读
+// @Route(method=PUT, path="/notices/my-page/read-all", middlewares=["jwt"])
+// @Permission(code="sys:notice:read-all",name="标记全部为已读",modules="Notices管理", desc="标记全部为已读")
+func (c *NoticesController) MarkAllAsRead(ctx *gin.Context) {
+	userIDStr := ctx.GetString("userID")
+	userID, err := utils.ParseUintID(userIDStr)
+	if err != nil {
+		response.BadRequest(ctx, "Invalid userID")
+		return
+	}
+	err = c.service.MarkAllAsRead(ctx, uint(userID))
+	if err != nil {
+		response.Error(ctx, err)
+		return
+	}
+	response.Success(ctx, nil)
 }

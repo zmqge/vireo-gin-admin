@@ -3,6 +3,7 @@ package repositories
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -22,12 +23,19 @@ type NoticesRepository interface {
 	PageNotices(ctx *gin.Context, keywords string, publishStatus string, pageNum, pageSize int) ([]*models.NoticesModel, int64, error)
 	RevokeNotice(ctx *gin.Context, id uint) error  // 使用uint类型
 	PublishNotice(ctx *gin.Context, id uint) error // 使用uint类型
+	MarkNoticeAsRead(ctx *gin.Context, userID uint, noticeID uint) error
+
+	GetNoticeWithReceivers(ctx *gin.Context, id uint) (*models.NoticesModel, error)
+	UpdateNoticeStatusTx(tx *gorm.DB, id uint, status uint) error
 
 	// 新增事务支持
 	CreateNoticesTx(tx *gorm.DB, entity *models.NoticesModel) error
 	BeginTx(ctx *gin.Context) *gorm.DB
 	PublishNoticesTx(ctx *gin.Context, tx *gorm.DB, id uint) error
 	RevokeNoticesTx(tx *gorm.DB, id uint) error
+	MyPageNotices(ctx *gin.Context, userID uint, keywords string, isRead uint, pageNum, pageSize int) ([]*models.NoticesModel, int64, error)
+	GetMyNoticesByID(ctx *gin.Context, userID uint, noticeID uint) (*models.NoticesModel, error)
+	MarkAllAsRead(ctx *gin.Context, userID uint) error
 }
 
 // NoticesRepositoryImpl Notices数据访问实现
@@ -53,6 +61,63 @@ func (r *NoticesRepositoryImpl) GetNoticesByID(ctx *gin.Context, id uint) (*mode
 		return nil, err
 	}
 	return &entity, nil
+}
+
+// GetMyNoticesByID 根据用户ID和通知ID获取用户的通知
+func (r *NoticesRepositoryImpl) GetMyNoticesByID(ctx *gin.Context, userID uint, noticeID uint) (*models.NoticesModel, error) {
+	var notice models.NoticesModel
+
+	// 构建查询：通过notice_receiver表关联，确保用户有权限访问该通知
+	err := r.db.WithContext(ctx).
+		Select("notices.*, users.nickname as publisher_name, notice_receiver.is_read").
+		Joins("JOIN notice_receiver ON notices.id = notice_receiver.notice_id").
+		Joins("LEFT JOIN users ON users.id = notices.creator_id").
+		Where("notice_receiver.user_id = ? AND notice_receiver.notice_id = ?", userID, noticeID).
+		First(&notice).Error
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil // 无记录不算错误
+		}
+		return nil, fmt.Errorf("查询用户通知失败: %w", err)
+	}
+
+	return &notice, nil
+}
+
+// MarkNoticeAsRead 标记通知为已读
+func (r *NoticesRepositoryImpl) MarkNoticeAsRead(ctx *gin.Context, userID uint, noticeID uint) error {
+	result := r.db.WithContext(ctx).
+		Model(&models.NoticeReceiver{}).
+		Where("user_id = ? AND notice_id = ?", userID, noticeID).
+		Updates(map[string]interface{}{
+			"is_read":   1,
+			"read_time": time.Now(),
+		})
+
+	if result.Error != nil {
+		return fmt.Errorf("更新已读状态失败: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("未找到对应的通知接收记录")
+	}
+
+	return nil
+}
+
+// MarkAllAsRead 标记用户所有通知为已读
+func (r *NoticesRepositoryImpl) MarkAllAsRead(ctx *gin.Context, userID uint) error {
+	// 使用批量更新语法（MySQL示例）
+	err := r.db.WithContext(ctx).Exec(`
+        UPDATE notice_receiver 
+        SET is_read = 1, read_time = NOW() 
+        WHERE user_id = ? AND is_read = 0
+    `, userID).Error
+
+	if err != nil {
+		return fmt.Errorf("更新所有通知为已读状态失败: %w", err)
+	}
+	return nil
 }
 
 // ListNoticess 获取Notices列表
@@ -176,4 +241,67 @@ func (r *NoticesRepositoryImpl) RevokeNoticesTx(tx *gorm.DB, id uint) error {
 			"status":     2,
 			"revoked_at": now,
 		}).Error
+}
+
+// MyPageNotices 获取我的公告列表
+// MyPageNotices 获取我的公告列表（带已读/未读状态）
+func (r *NoticesRepositoryImpl) MyPageNotices(ctx *gin.Context, userID uint, keywords string, isRead uint, pageNum, pageSize int) ([]*models.NoticesModel, int64, error) {
+	var notices []*models.NoticesModel
+	var total int64
+
+	// 构建基础查询
+	query := r.db.WithContext(ctx).
+		Model(&models.NoticesModel{}).
+		Select("notices.*, notice_receiver.is_read").
+		Joins("JOIN notice_receiver ON notices.id = notice_receiver.notice_id").
+		Where("notice_receiver.user_id = ?", userID)
+
+	// 添加关键词筛选
+	if keywords != "" {
+		query = query.Where("notices.title LIKE ?", "%"+keywords+"%")
+	}
+
+	// 添加已读/未读筛选
+	if isRead == 0 || isRead == 1 {
+		query = query.Where("notice_receiver.is_read = ?", isRead)
+	}
+	// 必须是已发布的消息，其他的状态不展示给用户
+	query = query.Where("notices.status = 1")
+
+	// 获取总数
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, fmt.Errorf("获取总数失败: %w", err)
+	}
+
+	// 执行分页查询
+	err := query.
+		Order("notices.id DESC").
+		Offset((pageNum - 1) * pageSize).
+		Limit(pageSize).
+		Find(&notices).Error
+
+	if err != nil {
+		return nil, 0, fmt.Errorf("查询通知列表失败: %w", err)
+	}
+
+	return notices, total, nil
+}
+
+// 获取通知及其接收者关系
+func (r *NoticesRepositoryImpl) GetNoticeWithReceivers(ctx *gin.Context, id uint) (*models.NoticesModel, error) {
+	var notice models.NoticesModel
+	err := r.db.WithContext(ctx).
+		Preload("Receivers").
+		First(&notice, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &notice, nil
+}
+
+// 更新通知状态（事务版本）
+func (r *NoticesRepositoryImpl) UpdateNoticeStatusTx(tx *gorm.DB, id uint, status uint) error {
+	return tx.Model(&models.NoticesModel{}).
+		Where("id = ?", id).
+		Update("status", status).Error
 }
