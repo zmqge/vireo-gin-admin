@@ -11,16 +11,16 @@
 
 ### 1. 安装
 ```bash
-go install github.com/yourusername/yourtool@latest
+go install github.com/zmqge/vireo-gin-admin/cmd/generator@latest  
 ```
 
 ### 2. 基本使用
 ```bash
 # 基本命令
-yourtool -entity=Dict -path=app/admin
+go run cmd/generator/main.go -entity=Dict -path=app/admin
 
 # 完整参数
-yourtool -entity=Dict -module=github.com/yourproject -path=app/admin
+go run cmd/generator/main.go -entity=Dict -module=github.com/zmqge/vireo-gin-admin -path=app/admin
 ```
 
 ### 3. 参数说明
