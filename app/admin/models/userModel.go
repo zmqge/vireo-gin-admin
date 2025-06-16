@@ -2,6 +2,8 @@
 package models
 
 import (
+	"time"
+
 	"github.com/zmqge/vireo-gin-admin/pkg/database"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -24,6 +26,14 @@ type User struct {
 	DeptID   uint   `json:"dept_id"`
 	RoleList []Role `json:"role_list" gorm:"many2many:user_roles;"`
 	Dept     Dept   `gorm:"foreignKey:DeptID"`
+
+	// 用户最后登录信息
+	LastLoginIP        string     `json:"last_login_ip"`         // 最后登录IP
+	LastLoginTime      *time.Time `json:"last_login_time"`       // 最后登录时间
+	LastLoginUserAgent string     `json:"last_login_user_agent"` // 用户登录时的浏览器信息
+	LastLoginDevice    string     `json:"last_login_device"`     // 最后登录设备
+	LastLoginBrowser   string     `json:"last_login_browser"`    // 最后登录浏览器
+	LastLoginOS        string     `json:"last_login_os"`         // 最后登录操作系统
 
 	// 权限相关字段（不映射到数据库）
 	DataScope       int    `json:"data_scope" gorm:"-"` // 用户最高数据权限（不存储）

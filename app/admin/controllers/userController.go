@@ -10,14 +10,13 @@ import (
 	"github.com/zmqge/vireo-gin-admin/app/admin/services"
 	"github.com/zmqge/vireo-gin-admin/pkg/database"
 	"github.com/zmqge/vireo-gin-admin/pkg/response"
-	"gorm.io/gorm"
 )
 
 // UserController 用户控制器
 // @Group(name="用户管理",path="/api/v1/")
 type UserController struct {
 	BaseController
-	userService *services.UserService
+	userService services.UserService
 }
 
 // RouteMeta 路由元数据
@@ -35,10 +34,9 @@ type BaseController struct {
 }
 
 // NewUserController 创建 UserController 实例
-func NewUserController(db *gorm.DB) *UserController {
-	repo := services.NewUserService(db)
+func NewUserController(userService services.UserService) *UserController {
 	return &UserController{
-		userService: repo,
+		userService: userService,
 	}
 }
 
@@ -280,7 +278,7 @@ func (c *UserController) UpdateUser(ctx *gin.Context) {
 
 // 新增用户
 // @Route(method=POST, path="/users", middlewares=["jwt"])
-// @Permission(code="sys:user:create",name="用户新增", modules="用户管理", desc="创建新用户")
+// @Permission(code="sys:user:add",name="用户新增", modules="用户管理", desc="创建新用户")
 func (c *UserController) CreateUser(ctx *gin.Context) {
 	var req struct {
 		Username string  `json:"username" binding:"required"`

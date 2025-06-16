@@ -3,9 +3,9 @@ package controllers
 import (
 	"strconv"
 
+	"github.com/gin-gonic/gin"
 	"github.com/zmqge/vireo-gin-admin/app/admin/models"
 	"github.com/zmqge/vireo-gin-admin/app/admin/services"
-	"github.com/gin-gonic/gin"
 	"github.com/zmqge/vireo-gin-admin/pkg/response"
 )
 
@@ -30,8 +30,8 @@ func (c *NoticeReceiverController) GetNoticeReceiverDetails(ctx *gin.Context) {
 		response.BadRequest(ctx, "Invalid ID")
 		return
 	}
-	
-	entity, err := c.service.GetNoticeReceiverByID(ctx,uint(id))
+
+	entity, err := c.service.GetNoticeReceiverByID(ctx, uint(id))
 	if err != nil {
 		response.Error(ctx, err)
 		return
@@ -43,7 +43,7 @@ func (c *NoticeReceiverController) GetNoticeReceiverDetails(ctx *gin.Context) {
 // @Route(method=GET, path="/noticereceiver/page", middlewares=["jwt","dataperm"])
 // @Permission(code="sys:noticereceiver:query",name="NoticeReceiver列表",modules="NoticeReceiver管理", desc="查看NoticeReceiver列表")
 func (c *NoticeReceiverController) ListNoticeReceivers(ctx *gin.Context) {
-keywords := ctx.Query("keywords")
+	keywords := ctx.Query("keywords")
 	pageNumStr := ctx.DefaultQuery("pageNum", "1")
 	pageSizeStr := ctx.DefaultQuery("pageSize", "10")
 	pageNum, _ := strconv.Atoi(pageNumStr)
@@ -55,7 +55,7 @@ keywords := ctx.Query("keywords")
 		pageSize = 10
 	}
 
-	list, total, err := c.service.PageNoticeReceivers(ctx,keywords, pageNum, pageSize)
+	list, total, err := c.service.PageNoticeReceivers(ctx, keywords, pageNum, pageSize)
 	if err != nil {
 		response.Error(ctx, err)
 		return
@@ -76,7 +76,7 @@ func (c *NoticeReceiverController) CreateNoticeReceiver(ctx *gin.Context) {
 		response.BadRequest(ctx, "Invalid request body")
 		return
 	}
-	err := c.service.CreateNoticeReceiver(ctx,&entity)
+	err := c.service.CreateNoticeReceiver(ctx, &entity)
 	if err != nil {
 		response.Error(ctx, err)
 		return
@@ -94,14 +94,14 @@ func (c *NoticeReceiverController) UpdateNoticeReceiver(ctx *gin.Context) {
 		response.BadRequest(ctx, "Invalid ID")
 		return
 	}
-	
+
 	var entity models.NoticeReceiverModel
 	if err := ctx.ShouldBindJSON(&entity); err != nil {
 		response.BadRequest(ctx, "Invalid request body")
 		return
 	}
 	entity.ID = uint(id)
-	err = c.service.UpdateNoticeReceiver(ctx,&entity)
+	err = c.service.UpdateNoticeReceiver(ctx, &entity)
 	if err != nil {
 		response.Error(ctx, err)
 		return
@@ -119,8 +119,8 @@ func (c *NoticeReceiverController) DeleteNoticeReceiver(ctx *gin.Context) {
 		response.BadRequest(ctx, "Invalid ID")
 		return
 	}
-	
-	err = c.service.DeleteNoticeReceiver(ctx,uint(id))
+
+	err = c.service.DeleteNoticeReceiver(ctx, uint(id))
 	if err != nil {
 		response.Error(ctx, err)
 		return
@@ -138,7 +138,7 @@ func (c *NoticeReceiverController) GetNoticeReceiverForm(ctx *gin.Context) {
 		response.BadRequest(ctx, "Invalid ID")
 		return
 	}
-	entity, err := c.service.GetNoticeReceiverByID(ctx,uint(id))
+	entity, err := c.service.GetNoticeReceiverByID(ctx, uint(id))
 
 	if err != nil {
 		response.Error(ctx, err)

@@ -1,0 +1,131 @@
+[33mcommit cb7cae68e6c92c7cc7a41d8895505cca39888408[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m, [m[1;31mgitee/master[m[33m, [m[1;31mgitee/HEAD[m[33m)[m
+Author: zmqge <94204000@qq.com>
+Date:   Sun Jun 15 22:26:39 2025 +0800
+
+    通知公告反向未读
+
+ app/admin/controllers/noticeReceiverController.go  | 148 [32m+++++[m
+ app/admin/models/noticeReceiverModel.go            |  23 [32m+[m
+ app/admin/repositories/noticeReceiverRepository.go | 128 [32m+++++[m
+ app/admin/services/noticeReceiverService.go        |  75 [32m+++[m
+ utils/userAgent.go                                 |  28 [32m+[m
+ vendor/github.com/mssola/user_agent/CHANGELOG.md   |  67 [32m+++[m
+ .../github.com/mssola/user_agent/CONTRIBUTING.md   |  42 [32m++[m
+ vendor/github.com/mssola/user_agent/LICENSE        |  20 [32m+[m
+ vendor/github.com/mssola/user_agent/Makefile       |  25 [32m+[m
+ vendor/github.com/mssola/user_agent/README.md      |  95 [32m++++[m
+ vendor/github.com/mssola/user_agent/bot.go         | 149 [32m+++++[m
+ vendor/github.com/mssola/user_agent/browser.go     | 193 [32m+++++++[m
+ vendor/github.com/mssola/user_agent/model.go       |  35 [32m++[m
+ .../mssola/user_agent/operating_systems.go         | 377 [32m+++++++++++++[m
+ vendor/github.com/mssola/user_agent/user_agent.go  | 190 [32m+++++++[m
+ vendor/gorm.io/gorm/generics.go                    | 605 [32m+++++++++++++++++++++[m
+ 16 files changed, 2200 insertions(+)
+
+[33mcommit 3cf1fe0ec05b63dddfb8471c8be8db1bd9ea50e2[m
+Author: 智码强哥 <94204000@qq.com>
+Date:   Sat Jun 14 08:06:21 2025 +0000
+
+    add LICENSE.
+    
+    Signed-off-by: 智码强哥 <94204000@qq.com>
+
+ LICENSE | 21 [32m+++++++++++++++++++++[m
+ 1 file changed, 21 insertions(+)
+
+[33mcommit 6ae4690534f54b766d4f9b1cb3920c6da0cb1286[m[33m ([m[1;31mgithub/master[m[33m)[m
+Author: zmqge <94204000@qq.com>
+Date:   Sat Jun 14 15:53:29 2025 +0800
+
+    initial commit
+
+ .cursor/api_doc.md                                 |   243 [32m+[m
+ .cursor/dump-vireo_gin_admin-202506010841.sql      |   317 [32m+[m
+ .cursor/rules/vireo-gin-admin.mdc                  |   101 [32m+[m
+ README.md                                          |    74 [32m+[m
+ air.toml                                           |     5 [32m+[m
+ app/admin/controllers/authController.go            |   193 [32m+[m
+ app/admin/controllers/configController.go          |   148 [32m+[m
+ app/admin/controllers/deptController.go            |   187 [32m+[m
+ app/admin/controllers/dictController.go            |   296 [32m+[m
+ app/admin/controllers/menuController.go            |   324 [32m+[m
+ app/admin/controllers/mfaController.go             |    76 [32m+[m
+ app/admin/controllers/noticesController.go         |   215 [32m+[m
+ app/admin/controllers/permissionController.go      |    49 [32m+[m
+ app/admin/controllers/roleController.go            |   246 [32m+[m
+ app/admin/controllers/userController.go            |   451 [32m+[m
+ app/admin/models/configModel.go                    |    72 [32m+[m
+ app/admin/models/deptModel.go                      |    20 [32m+[m
+ app/admin/models/dictModel.go                      |    38 [32m+[m
+ app/admin/models/menuModel.go                      |    79 [32m+[m
+ app/admin/models/noticesModel.go                   |    79 [32m+[m
+ app/admin/models/permissionModel.go                |    86 [32m+[m
+ app/admin/models/roleModel.go                      |    97 [32m+[m
+ app/admin/models/userMfaModel.go                   |    12 [32m+[m
+ app/admin/models/userModel.go                      |    94 [32m+[m
+ app/admin/repositories/configRepository.go         |   107 [32m+[m
+ app/admin/repositories/deptRepository.go           |    52 [32m+[m
+ app/admin/repositories/dictRepository.go           |   175 [32m+[m
+ app/admin/repositories/menuRepository.go           |   127 [32m+[m
+ app/admin/repositories/noticesRepository.go        |   142 [32m+[m
+ app/admin/repositories/roleRepository.go           |   128 [32m+[m
+ app/admin/repositories/userRepository.go           |   279 [32m+[m
+ app/admin/services/configService.go                |    78 [32m+[m
+ app/admin/services/deptService.go                  |   275 [32m+[m
+ app/admin/services/dictService.go                  |   129 [32m+[m
+ app/admin/services/menuService.go                  |   214 [32m+[m
+ app/admin/services/mfaService.go                   |    55 [32m+[m
+ app/admin/services/noticesService.go               |    90 [32m+[m
+ app/admin/services/permissionService.go            |   132 [32m+[m
+ app/admin/services/roleService.go                  |   159 [32m+[m
+ app/admin/services/tokenService.go                 |    36 [32m+[m
+ app/admin/services/userService.go                  |   237 [32m+[m
+ cmd/generator/main.go                              |   227 [32m+[m
+ cmd/generator/readme.md                            |   118 [32m+[m
+ cmd/generator/templates/controller.tmpl            |   148 [32m+[m
+ cmd/generator/templates/model.tmpl                 |    68 [32m+[m
+ cmd/generator/templates/repository.tmpl            |   105 [32m+[m
+ cmd/generator/templates/service.tmpl               |    75 [32m+[m
+ cmd/permgen/main.go                                |    94 [32m+[m
+ cmd/routegen/main copy.go1                         |   570 [32m+[m
+ cmd/routegen/main.go                               |   586 [32m+[m
+ config/config.go                                   |    98 [32m+[m
+ config/config.yaml                                 |    29 [32m+[m
+ config/secret_loader.go                            |    26 [32m+[m
+ config/secret_loader_test.go                       |    28 [32m+[m
+ coverage.out                                       |   122 [32m+[m
+ db/init_rbac.sql                                   |    61 [32m+[m
+ db/user_mfa.sql                                    |    10 [32m+[m
+ deploy/.env.example                                |     3 [32m+[m
+ go.mod                                             |    77 [32m+[m
+ go.sum                                             |   224 [32m+[m
+ init.project.ps1                                   |   181 [32m+[m
+ main.go                                            |    90 [32m+[m
+ pkg/annotations/parser.go                          |   286 [32m+[m
+ pkg/annotations/perm_parser.go                     |    70 [32m+[m
+ pkg/annotations/scanner.go                         |    62 [32m+[m
+ pkg/auth/auth.go                                   |    13 [32m+[m
+ pkg/auth/jwt.go                                    |   205 [32m+[m
+ pkg/auth/jwt_test.go                               |    38 [32m+[m
+ pkg/cache/permission_cache.go                      |    37 [32m+[m
+ pkg/cache/redis.go                                 |    34 [32m+[m
+ pkg/database/db.go                                 |    42 [32m+[m
+ pkg/database/hooks.go                              |    18 [32m+[m
+ pkg/database/models.go                             |    25 [32m+[m
+ pkg/logger/logger.go                               |    60 [32m+[m
+ pkg/middleware/cors.go                             |    23 [32m+[m
+ pkg/middleware/dataperm.go                         |   175 [32m+[m
+ pkg/middleware/jwt.go                              |    74 [32m+[m
+ pkg/middleware/logger.go                           |    17 [32m+[m
+ pkg/middleware/rbac.go                             |   183 [32m+[m
+ pkg/middleware/recovery.go                         |    20 [32m+[m
+ pkg/redis/redis.go                                 |    57 [32m+[m
+ pkg/redis/redis_test.go                            |    98 [32m+[m
+ pkg/response/response.go                           |    45 [32m+[m
+ pkg/scopes/datascope.go                            |    97 [32m+[m
+ prompt.md                                          |   502 [32m+[m
+ routes/admin-api.go                                |    99 [32m+[m
+ routes/mfa.go                                      |    30 [32m+[m
+ routes/mfa_routes.go                               |     9 [32m+[m
+ routes/permission_bind.go                          |    17 [32m+[m
+ routes/rout

@@ -3,7 +3,6 @@ package repositories
 import (
 	"context"
 	"errors"
-	"log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zmqge/vireo-gin-admin/app/admin/models"
@@ -20,8 +19,8 @@ type NoticeReceiverRepository interface {
 	DeleteNoticeReceiver(ctx *gin.Context, id uint) error // 使用uint类型
 	PageNoticeReceivers(ctx *gin.Context, keywords string, pageNum, pageSize int) ([]*models.NoticeReceiverModel, int64, error)
 
-	BatchCreate(ctx *gin.Context, receivers []models.NoticeReceiver) error
-	BatchCreateTx(ctx *gin.Context, tx *gorm.DB, receivers []models.NoticeReceiver) error // 新增事务版本
+	BatchCreate(ctx *gin.Context, receivers []models.NoticeReceiverModel) error
+	BatchCreateTx(ctx *gin.Context, tx *gorm.DB, receivers []models.NoticeReceiverModel) error // 新增事务版本
 }
 
 // NoticeReceiverRepositoryImpl NoticeReceiver数据访问实现
@@ -110,15 +109,14 @@ func (r *NoticeReceiverRepositoryImpl) PageNoticeReceivers(ctx *gin.Context, key
 	return entities, total, nil
 }
 
-func (r *NoticeReceiverRepositoryImpl) BatchCreate(ctx *gin.Context, receivers []models.NoticeReceiver) error {
+func (r *NoticeReceiverRepositoryImpl) BatchCreate(ctx *gin.Context, receivers []models.NoticeReceiverModel) error {
 	if len(receivers) == 0 {
 		return nil
 	}
 	return r.db.WithContext(ctx).CreateInBatches(receivers, 500).Error
 }
 
-func (r *NoticeReceiverRepositoryImpl) BatchCreateTx(ctx *gin.Context, tx *gorm.DB, receivers []models.NoticeReceiver) error {
-	log.Printf("准备批量插入 %d 条接收者记录\n", len(receivers))
+func (r *NoticeReceiverRepositoryImpl) BatchCreateTx(ctx *gin.Context, tx *gorm.DB, receivers []models.NoticeReceiverModel) error {
 
 	if len(receivers) == 0 {
 		return nil

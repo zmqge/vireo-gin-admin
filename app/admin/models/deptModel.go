@@ -18,3 +18,12 @@ type DeptV0 struct {
 	Status   int       `json:"status"`
 	Children *[]DeptV0 `json:"children,omitempty"` // 使用指针和omitempty
 }
+
+type UserDept struct {
+	DeptID uint `gorm:"column:dept_id;comment:部门ID" json:"deptId"`
+	UserID uint `gorm:"column:user_id;comment:用户ID" json:"userId"`
+}
+
+func (UserDept) TableName() string {
+	return "user_dept"
+}

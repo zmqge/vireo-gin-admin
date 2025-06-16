@@ -6,25 +6,46 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/zmqge/vireo-gin-admin/app/admin/models"
 	"github.com/zmqge/vireo-gin-admin/app/admin/repositories"
 	"github.com/zmqge/vireo-gin-admin/pkg/database"
+	"github.com/zmqge/vireo-gin-admin/utils"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
-type UserService struct {
+type UserService interface {
+	GetList(page, pageSize int) ([]models.User, int64, error)
+	CreateUser(username, password string) error
+	UpdateUser(id string, username string, status int) error
+	UpdateUserFull(id string, nickname, mobile string, gender string, avatar, email string, status, deptId int, roleIds []int64, openId string) error
+	CreateUserFull(username, nickname, mobile string, gender string, avatar, email string, status int, deptId uint, roleIds []int64, openId, password string) error
+	ChangePassword(userID, oldPassword, newPassword string) error
+	GetDeptName(deptID uint) (string, error)
+	GetRoleNames(userID string) (string, error)
+	UpdateUserProfile(userID string, nickname, avatar string, gender string, mobile, email string) error
+	ListUserOptions(ctx *gin.Context) ([]models.UserOption, error)
+	Delete(userID string) error
+	GetUser(userID string) (*models.User, error)
+	GetUserPage(ctx *gin.Context, params models.UserQueryParams) (*models.UserPageResult, error)
+	GetUserRoles(userID string) ([]models.Role, error)
+	ResetPassword(userID string, password string) error
+	VerifyUser(username, password string) (*models.User, error)
+	UpdateLastLogin(userID uint, ClientIP string, loginTime time.Time, userAgent string) error
+}
+type UserServiceImpl struct {
 	db   *gorm.DB
-	repo *repositories.UserRepository
+	repo repositories.UserRepository
 }
 
-func NewUserService(db *gorm.DB) *UserService {
-	return &UserService{db: db, repo: repositories.NewUserRepository(db)}
+func NewUserService(db *gorm.DB) *UserServiceImpl {
+	return &UserServiceImpl{db: db, repo: repositories.NewUserRepository(db)}
 }
 
-func (s *UserService) GetList(page, pageSize int) ([]models.User, int64, error) {
+func (s *UserServiceImpl) GetList(page, pageSize int) ([]models.User, int64, error) {
 	var users []models.User
 	var total int64
 
@@ -50,7 +71,7 @@ func RandSalt() string {
 	return base64.StdEncoding.EncodeToString(salt)
 }
 
-func (s *UserService) CreateUser(username, password string) error {
+func (s *UserServiceImpl) CreateUser(username, password string) error {
 	salt := RandSalt()
 	hashedPassword, err := models.HashPasswordWithSalt(password, salt)
 	if err != nil {
@@ -64,7 +85,7 @@ func (s *UserService) CreateUser(username, password string) error {
 	return s.repo.Create(&user)
 }
 
-func (s *UserService) VerifyUser(username, password string) (*models.User, error) {
+func (s *UserServiceImpl) VerifyUser(username, password string) (*models.User, error) {
 	var user models.User
 	if err := s.db.Where("username = ?", username).First(&user).Error; err != nil {
 		return nil, err
@@ -94,7 +115,7 @@ func CreateUser(username, password string) error {
 	return NewUserService(database.DB).CreateUser(username, password)
 }
 
-func (s *UserService) Delete(id string) error {
+func (s *UserServiceImpl) Delete(id string) error {
 	uid, err := strconv.Atoi(id)
 	if err != nil {
 		return err
@@ -102,7 +123,7 @@ func (s *UserService) Delete(id string) error {
 	return s.repo.Delete(uint(uid))
 }
 
-func (s *UserService) UpdateUser(id string, username string, status int) error {
+func (s *UserServiceImpl) UpdateUser(id string, username string, status int) error {
 	return s.db.Model(&models.User{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
@@ -112,7 +133,7 @@ func (s *UserService) UpdateUser(id string, username string, status int) error {
 }
 
 // UpdateUserFull 全量更新用户信息及角色
-func (s *UserService) UpdateUserFull(id string, nickname, mobile string, gender string, avatar, email string, status, deptId int, roleIds []int64, openId string) error {
+func (s *UserServiceImpl) UpdateUserFull(id string, nickname, mobile string, gender string, avatar, email string, status, deptId int, roleIds []int64, openId string) error {
 	uid, err := strconv.Atoi(id)
 	if err != nil {
 		return err
@@ -121,7 +142,7 @@ func (s *UserService) UpdateUserFull(id string, nickname, mobile string, gender 
 }
 
 // GetUser 根据ID获取用户
-func (s *UserService) GetUser(id string) (*models.User, error) {
+func (s *UserServiceImpl) GetUser(id string) (*models.User, error) {
 	uid, err := strconv.Atoi(id)
 	if err != nil {
 		return nil, err
@@ -130,13 +151,13 @@ func (s *UserService) GetUser(id string) (*models.User, error) {
 }
 
 // GetUserPage 分页查询用户
-func (s *UserService) GetUserPage(ctx *gin.Context, params models.UserQueryParams) (*models.UserPageResult, error) {
+func (s *UserServiceImpl) GetUserPage(ctx *gin.Context, params models.UserQueryParams) (*models.UserPageResult, error) {
 	// 这里建议将分页查询下沉到 repo 层，service 只做业务逻辑
 	return s.repo.GetUserPage(ctx, params)
 }
 
 // GetUserRoles 获取用户角色列表
-func (s *UserService) GetUserRoles(userID string) ([]models.Role, error) {
+func (s *UserServiceImpl) GetUserRoles(userID string) ([]models.Role, error) {
 	var user models.User
 	if err := s.db.Preload("RoleList").First(&user, userID).Error; err != nil {
 		return nil, err
@@ -145,12 +166,12 @@ func (s *UserService) GetUserRoles(userID string) ([]models.Role, error) {
 }
 
 // CreateUserFull 创建用户及角色
-func (s *UserService) CreateUserFull(username, nickname, mobile string, gender string, avatar, email string, status int, deptId uint, roleIds []int64, openId, password string) error {
+func (s *UserServiceImpl) CreateUserFull(username, nickname, mobile string, gender string, avatar, email string, status int, deptId uint, roleIds []int64, openId, password string) error {
 	return s.repo.CreateUserFull(username, nickname, mobile, gender, avatar, email, status, deptId, roleIds, openId, password)
 }
 
 // ResetPassword 重置用户密码
-func (s *UserService) ResetPassword(userID string, password string) error {
+func (s *UserServiceImpl) ResetPassword(userID string, password string) error {
 	uid, err := strconv.Atoi(userID)
 	if err != nil {
 		return err
@@ -164,7 +185,7 @@ func (s *UserService) ResetPassword(userID string, password string) error {
 }
 
 // ChangePassword 修改当前用户密码，校验原密码
-func (s *UserService) ChangePassword(userID, oldPassword, newPassword string) error {
+func (s *UserServiceImpl) ChangePassword(userID, oldPassword, newPassword string) error {
 	uid, err := strconv.Atoi(userID)
 	if err != nil {
 		return err
@@ -189,7 +210,7 @@ func (s *UserService) ChangePassword(userID, oldPassword, newPassword string) er
 }
 
 // GetDeptName 根据部门ID获取部门名称
-func (s *UserService) GetDeptName(deptID uint) (string, error) {
+func (s *UserServiceImpl) GetDeptName(deptID uint) (string, error) {
 	if deptID <= 0 {
 		return "", nil
 	}
@@ -201,7 +222,7 @@ func (s *UserService) GetDeptName(deptID uint) (string, error) {
 }
 
 // GetRoleNames 根据用户ID获取角色名称（逗号分隔）
-func (s *UserService) GetRoleNames(userID string) (string, error) {
+func (s *UserServiceImpl) GetRoleNames(userID string) (string, error) {
 	roles, err := s.GetUserRoles(userID)
 	if err != nil {
 		return "", err
@@ -217,7 +238,7 @@ func (s *UserService) GetRoleNames(userID string) (string, error) {
 }
 
 // UpdateUserProfile 修改个人中心用户信息
-func (s *UserService) UpdateUserProfile(userID string, nickname, avatar string, gender string, mobile, email string) error {
+func (s *UserServiceImpl) UpdateUserProfile(userID string, nickname, avatar string, gender string, mobile, email string) error {
 	uid, err := strconv.Atoi(userID)
 	if err != nil {
 		return err
@@ -232,6 +253,13 @@ func (s *UserService) UpdateUserProfile(userID string, nickname, avatar string, 
 	return s.repo.UpdateUserProfile(uint(uid), updateMap)
 }
 
-func (s *UserService) ListUserOptions(ctx *gin.Context) ([]models.UserOption, error) {
+func (s *UserServiceImpl) ListUserOptions(ctx *gin.Context) ([]models.UserOption, error) {
 	return s.repo.ListUserOptions(ctx)
+}
+
+// UpdateLastLogin 更新用户最后登录信息
+func (s *UserServiceImpl) UpdateLastLogin(userID uint, ClientIP string, loginTime time.Time, userAgent string) error {
+	//解析userAgent
+	device, os, browser := utils.ParseUserAgent(userAgent)
+	return s.repo.UpdateLastLogin(userID, ClientIP, loginTime, userAgent, device, browser, os)
 }

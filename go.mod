@@ -19,6 +19,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/google/uuid v1.6.0
 	github.com/mojocn/base64Captcha v1.3.8
+	github.com/mssola/user_agent v0.6.0
 	github.com/patrickmn/go-cache v2.1.0+incompatible
 	github.com/pquerna/otp v1.5.0
 	github.com/sirupsen/logrus v1.9.3

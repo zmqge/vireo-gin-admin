@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -17,19 +18,21 @@ import (
 	"github.com/zmqge/vireo-gin-admin/pkg/redis"
 	"github.com/zmqge/vireo-gin-admin/pkg/response"
 	"github.com/zmqge/vireo-gin-admin/utils"
-	"gorm.io/gorm"
 )
 
 // @Group(path="/api/v1/auth", name="认证", desc="认证接口")
 type AuthController struct {
-	userService  *services.UserService
-	tokenService *services.TokenService
+	userService  services.UserService
+	tokenService services.TokenService
 }
 
-func NewAuthController(db *gorm.DB) *AuthController {
+func NewAuthController(
+	userService services.UserService,
+	tokenService services.TokenService,
+) *AuthController {
 	return &AuthController{
-		userService:  services.NewUserService(db),
-		tokenService: services.NewTokenService(),
+		userService:  userService,
+		tokenService: tokenService,
 	}
 }
 
@@ -71,10 +74,20 @@ func (c *AuthController) Login(ctx *gin.Context) {
 		return
 	}
 
+	lastLoginTime := time.Now()
+	clientIP := ctx.ClientIP()
+	userAgent := ctx.Request.UserAgent()
+
 	// 6. 存储Refresh Token到数据库（可选）
-	if err := c.tokenService.SaveRefreshToken(user.ID, refreshToken); err != nil {
+	if err := c.tokenService.SaveRefreshToken(user.ID, refreshToken, clientIP, lastLoginTime); err != nil {
 		response.Error(ctx, err)
 		return
+	}
+
+	// 更新用户最后登录信息
+	if err := c.userService.UpdateLastLogin(user.ID, clientIP, lastLoginTime, userAgent); err != nil {
+		response.Error(ctx, err)
+		log.Println("更新用户最后登录信息失败:", err)
 	}
 
 	// 7. 返回双Token
@@ -116,7 +129,7 @@ func (c *AuthController) Logout(ctx *gin.Context) {
 		return
 	}
 	// 从Redis中删除Refresh Token
-	err = c.tokenService.DeleteRefreshToken(userIDUint)
+	err = c.tokenService.DeleteRefreshToken(uint(userIDUint))
 	if err != nil {
 		response.Error(ctx, err)
 		return

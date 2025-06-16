@@ -14,35 +14,50 @@ import (
 	"gorm.io/gorm"
 )
 
-type UserRepository struct {
+type UserRepository interface {
+	GetByID(id uint) (*models.User, error)
+	GetByUsername(username string) (*models.User, error)
+	GetDB() *gorm.DB
+	Create(user *models.User) error
+	Delete(id uint) error
+	GetUserPage(ctx *gin.Context, params models.UserQueryParams) (*models.UserPageResult, error)
+	UpdateUserFull(id uint, nickname, mobile string, gender string, avatar, email string, status, deptId int, roleIds []int64, openId string) error
+	CreateUserFull(username, nickname, mobile string, gender string, avatar, email string, status int, deptId uint, roleIds []int64, openId, password string) error
+	UpdatePassword(id uint, password, salt string) error
+	UpdateUserProfile(id uint, updateMap map[string]interface{}) error
+	ListUserOptions(ctx *gin.Context) ([]models.UserOption, error)
+	UpdateLastLogin(userID uint, ClientIP string, loginTime time.Time, userAgent string, device, browser, os string) error
+}
+
+type UserRepositoryImpl struct {
 	db *gorm.DB
 }
 
-func NewUserRepository(db *gorm.DB) *UserRepository {
-	return &UserRepository{db: db}
+func NewUserRepository(db *gorm.DB) UserRepository {
+	return &UserRepositoryImpl{db: db}
 }
 
-func (r *UserRepository) GetByID(id uint) (*models.User, error) {
+func (r *UserRepositoryImpl) GetByID(id uint) (*models.User, error) {
 	var user models.User
 	// 数据库操作：查询用户
 	err := r.db.First(&user, id).Error
 	return &user, err
 }
 
-func (r *UserRepository) GetByUsername(username string) (*models.User, error) {
+func (r *UserRepositoryImpl) GetByUsername(username string) (*models.User, error) {
 	var user models.User
 	// 数据库操作：根据用户名查询用户
 	err := r.db.Where("username = ?", username).First(&user).Error
 	return &user, err
 }
 
-func (r *UserRepository) Create(user *models.User) error {
+func (r *UserRepositoryImpl) Create(user *models.User) error {
 	// 数据库操作：创建用户记录
 	return r.db.Create(user).Error
 }
 
 // 删除用户（软删除，用户名追加 _deleted_时间戳）
-func (r *UserRepository) Delete(id uint) error {
+func (r *UserRepositoryImpl) Delete(id uint) error {
 	// 先查出用户
 	var user models.User
 	if err := r.db.First(&user, id).Error; err != nil {
@@ -58,7 +73,7 @@ func (r *UserRepository) Delete(id uint) error {
 	return r.db.Delete(&user).Error
 }
 
-func (r *UserRepository) GetUserPage(ctx *gin.Context, params models.UserQueryParams) (*models.UserPageResult, error) {
+func (r *UserRepositoryImpl) GetUserPage(ctx *gin.Context, params models.UserQueryParams) (*models.UserPageResult, error) {
 	// 数据库操作：获取用户分页数据
 	query := r.db.Table("users as u").
 		Scopes(scopes.DataPermissionScope(ctx)).WithContext(ctx).
@@ -138,27 +153,8 @@ func applyFilters(query *gorm.DB, params models.UserQueryParams) {
 	}
 }
 
-// 辅助函数：限制值在[min,max]范围内，否则返回defaultValue
-func clamp(value, min, max, defaultValue int) int {
-	if value <= 0 {
-		return defaultValue
-	}
-	if value > max {
-		return max
-	}
-	return value
-}
-
-// 辅助函数：返回两个数中的较大值
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // UpdateUserFull 全量更新用户信息及角色
-func (r *UserRepository) UpdateUserFull(id uint, nickname, mobile string, gender string, avatar, email string, status, deptId int, roleIds []int64, openId string) error {
+func (r *UserRepositoryImpl) UpdateUserFull(id uint, nickname, mobile string, gender string, avatar, email string, status, deptId int, roleIds []int64, openId string) error {
 	updates := map[string]interface{}{
 		"nickname": nickname,
 		"mobile":   mobile,
@@ -196,7 +192,7 @@ func (r *UserRepository) UpdateUserFull(id uint, nickname, mobile string, gender
 }
 
 // CreateUserFull 创建用户及角色
-func (r *UserRepository) CreateUserFull(username, nickname, mobile string, gender string, avatar, email string, status int, deptId uint, roleIds []int64, openId, password string) error {
+func (r *UserRepositoryImpl) CreateUserFull(username, nickname, mobile string, gender string, avatar, email string, status int, deptId uint, roleIds []int64, openId, password string) error {
 	// 生成 salt
 	salt := make([]byte, 16)
 	_, err := rand.Read(salt)
@@ -238,7 +234,7 @@ func (r *UserRepository) CreateUserFull(username, nickname, mobile string, gende
 }
 
 // UpdatePassword 重置用户密码（含salt）
-func (r *UserRepository) UpdatePassword(id uint, password, salt string) error {
+func (r *UserRepositoryImpl) UpdatePassword(id uint, password, salt string) error {
 	return r.db.Model(&models.User{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"password": password,
 		"salt":     salt,
@@ -246,13 +242,13 @@ func (r *UserRepository) UpdatePassword(id uint, password, salt string) error {
 }
 
 // UpdateUserProfile 更新个人中心用户信息（仅允许部分字段，map 更新，支持零值）
-func (r *UserRepository) UpdateUserProfile(id uint, updateMap map[string]interface{}) error {
+func (r *UserRepositoryImpl) UpdateUserProfile(id uint, updateMap map[string]interface{}) error {
 	return r.db.Model(&models.User{}).Where("id = ?", id).Updates(updateMap).Error
 }
 
 // 可根据需要继续补充 Update 等方法
 
-func (r *UserRepository) ListUserOptions(ctx *gin.Context) ([]models.UserOption, error) {
+func (r *UserRepositoryImpl) ListUserOptions(ctx *gin.Context) ([]models.UserOption, error) {
 	var users []models.User
 	if err := r.db.Scopes(scopes.DataPermissionScope(ctx)).WithContext(ctx).
 		Select("id , username ").
@@ -276,4 +272,21 @@ func (r *UserRepository) ListUserOptions(ctx *gin.Context) ([]models.UserOption,
 		return []models.UserOption{}, err
 	}
 	return options, nil
+}
+
+// GetDB 获取数据库连接
+func (r *UserRepositoryImpl) GetDB() *gorm.DB {
+	return r.db
+}
+
+// UpdateLastLogin 更新用户最后登录信息
+func (r *UserRepositoryImpl) UpdateLastLogin(userID uint, ClientIP string, loginTime time.Time, userAgent string, device, browser, os string) error {
+	return r.db.Model(&models.User{}).Where("id = ?", userID).Updates(map[string]interface{}{
+		"last_login_ip":         ClientIP,
+		"last_login_time":       loginTime,
+		"last_login_user_agent": userAgent,
+		"last_login_device":     device,
+		"last_login_browser":    browser,
+		"last_login_os":         os,
+	}).Error
 }

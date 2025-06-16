@@ -57,7 +57,7 @@ func (c *NoticesController) ListNoticess(ctx *gin.Context) {
 		pageSize = 10
 	}
 
-	list, total, err := c.service.PageNoticess(ctx, keywords, publishStatus, pageNum, pageSize)
+	list, total, err := c.service.PageNotices(ctx, keywords, publishStatus, pageNum, pageSize)
 	if err != nil {
 		response.Error(ctx, err)
 		return
@@ -177,7 +177,7 @@ func (c *NoticesController) PublishNotice(ctx *gin.Context) {
 		return
 	}
 
-	err = c.service.PublishNotice(ctx, id)
+	err = c.service.PublishNoticeWithReceivers(ctx, id)
 	if err != nil {
 		response.Error(ctx, err)
 		return
@@ -202,7 +202,7 @@ func (c *NoticesController) GetMyNoticess(ctx *gin.Context) {
 		pageSize = 10
 	}
 
-	list, total, err := c.service.PageNoticess(ctx, keywords, publishStatus, pageNum, pageSize)
+	list, total, err := c.service.PageNotices(ctx, keywords, publishStatus, pageNum, pageSize)
 	if err != nil {
 		response.Error(ctx, err)
 		return

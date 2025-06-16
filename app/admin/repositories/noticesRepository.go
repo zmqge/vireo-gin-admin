@@ -19,10 +19,15 @@ type NoticesRepository interface {
 	CreateNotices(ctx *gin.Context, entity *models.NoticesModel) error
 	UpdateNotices(ctx *gin.Context, entity *models.NoticesModel) error
 	DeleteNotices(ctx *gin.Context, id uint) error // 使用uint类型
-	PageNoticess(ctx *gin.Context, keywords string, publishStatus string, pageNum, pageSize int) ([]*models.NoticesModel, int64, error)
+	PageNotices(ctx *gin.Context, keywords string, publishStatus string, pageNum, pageSize int) ([]*models.NoticesModel, int64, error)
 	RevokeNotice(ctx *gin.Context, id uint) error  // 使用uint类型
 	PublishNotice(ctx *gin.Context, id uint) error // 使用uint类型
 
+	// 新增事务支持
+	CreateNoticesTx(tx *gorm.DB, entity *models.NoticesModel) error
+	BeginTx(ctx *gin.Context) *gorm.DB
+	PublishNoticesTx(ctx *gin.Context, tx *gorm.DB, id uint) error
+	RevokeNoticesTx(tx *gorm.DB, id uint) error
 }
 
 // NoticesRepositoryImpl Notices数据访问实现
@@ -93,7 +98,7 @@ func (r *NoticesRepositoryImpl) DeleteNotices(ctx *gin.Context, id uint) error {
 }
 
 // PageNoticess 分页获取Notices列表
-func (r *NoticesRepositoryImpl) PageNoticess(ctx *gin.Context, keywords string, publishStatus string, pageNum, pageSize int) ([]*models.NoticesModel, int64, error) {
+func (r *NoticesRepositoryImpl) PageNotices(ctx *gin.Context, keywords string, publishStatus string, pageNum, pageSize int) ([]*models.NoticesModel, int64, error) {
 	var entities []*models.NoticesModel
 	var total int64
 	// 构建查询条件
@@ -138,5 +143,37 @@ func (r *NoticesRepositoryImpl) PublishNotice(ctx *gin.Context, id uint) error {
 		Updates(map[string]interface{}{
 			"status":       1,
 			"published_at": now,
+		}).Error
+}
+
+// CreateNoticesTx 创建事务
+func (r *NoticesRepositoryImpl) CreateNoticesTx(tx *gorm.DB, entity *models.NoticesModel) error {
+	return tx.Create(entity).Error
+}
+
+// BeginTx 开启事务
+func (r *NoticesRepositoryImpl) BeginTx(ctx *gin.Context) *gorm.DB {
+	return r.db.WithContext(ctx).Begin()
+}
+
+// PublishNoticesTx 发布事务
+func (r *NoticesRepositoryImpl) PublishNoticesTx(ctx *gin.Context, tx *gorm.DB, id uint) error {
+	now := time.Now()
+	return tx.Model(&models.NoticesModel{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"status":       1,
+			"published_at": now,
+		}).Error
+}
+
+// RevokeNoticesTx 撤销事务
+func (r *NoticesRepositoryImpl) RevokeNoticesTx(tx *gorm.DB, id uint) error {
+	now := time.Now()
+	return tx.Model(&models.NoticesModel{}).
+		Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"status":     2,
+			"revoked_at": now,
 		}).Error
 }
