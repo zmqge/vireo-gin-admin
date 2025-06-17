@@ -27,3 +27,5 @@ RBAC:
 controller_dirs:
   - app/admin
   # - app/test
+
+Demo_Mode: false

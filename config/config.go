@@ -39,6 +39,7 @@ type Config struct {
 		AdminRole      string `mapstructure:"AdminRole"`
 	} `mapstructure:"RBAC"`
 	ControllerDirs []string `mapstructure:"CONTROLLER_DIRS"`
+	DemoMode       bool     `mapstructure:"DEMO_MODE"`
 }
 
 var App Config

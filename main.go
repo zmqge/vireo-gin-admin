@@ -55,6 +55,7 @@ func main() {
 	})
 
 	// 应用全局中间件
+	r.Use(middleware.DemoMode())
 	r.Use(middleware.Logger())   // 日志中间件
 	r.Use(middleware.Recovery()) // 恢复中间件
 	r.Use(middleware.Cors())     // 跨域中间件
