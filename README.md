@@ -15,6 +15,10 @@ Vireo Gin Admin 是一个基于Go+Gin+Gorm开发的后台管理系统，提供�
 - :100: 采用无状态设计，支持水平扩展，搭配 Redis 实现动态权限管理，让您的系统轻松应对高并发
 - :rocket: 注解路由和注解权限，采用编译时注解处理，零运行时开销设计，让代码运行时开销最小，提升性能
 
+## 在线演示
+
+[https://admin.zmqiang.com](https://admin.zmqiang.com)
+
 ## 项目仓库
 - 后端:
   - [Gitee](https://gitee.com/zmqge/vireo-gin-admin)
