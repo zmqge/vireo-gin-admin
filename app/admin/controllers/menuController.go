@@ -27,7 +27,6 @@ func NewMenuController(db *gorm.DB) *MenuController {
 
 // GetCurrentUserRoutes 获取当前用户的路由列表
 // @Route(method=GET, path="/menus/routes", middlewares=["jwt"])
-// @Permission(code="sys:menu:routes",name="路由列表",modules="菜单管理", desc="查看菜单路由", modules="菜单管理")
 func (c *MenuController) GetCurrentUserRoutes(ctx *gin.Context) {
 	userID := ctx.GetString("userID")
 	if userID == "" {

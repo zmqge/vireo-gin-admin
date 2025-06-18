@@ -2,8 +2,10 @@ package services
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/zmqge/vireo-gin-admin/app/admin/models"
+	"github.com/zmqge/vireo-gin-admin/config"
 	"github.com/zmqge/vireo-gin-admin/pkg/annotations"
 	"github.com/zmqge/vireo-gin-admin/pkg/database"
 	"gorm.io/gorm"
@@ -68,37 +70,49 @@ func (s *PermissionService) SyncPermissions() error {
 
 // GetUserRolesAndPermissions 获取用户的角色和权限
 func (s *PermissionService) GetUserRolesAndPermissions(userID string) ([]string, []string, error) {
-	// 记录输入的用户 ID
 	fmt.Printf("开始查询用户角色和权限，用户 ID: %s\n", userID)
 
-	// 查询用户的角色
+	// 查询用户角色
 	var roles []string
 	err := s.DB.Model(&models.UserRole{}).
 		Joins("JOIN roles ON user_roles.role_id = roles.id").
 		Where("user_roles.user_id = ?", userID).
 		Pluck("roles.name", &roles).Error
 	if err != nil {
-		// 记录查询角色失败的错误
 		fmt.Printf("查询用户角色失败，用户 ID: %s, 错误: %v\n", userID, err)
 		return nil, nil, fmt.Errorf("查询用户角色失败: %v", err)
 	}
-
-	// 记录查询到的角色
 	fmt.Printf("用户角色查询成功，用户 ID: %s, 角色: %v\n", userID, roles)
 
-	// 查询用户的权限
+	// 检查是否是超级管理员
+	isSuperAdmin := false
+	for _, role := range roles {
+		log.Printf("检查角色 %s\n", role)
+		if role == config.App.RBAC.SuperAdminRole {
+			log.Printf("用户 %s 是超级管理员\n", userID)
+			isSuperAdmin = true
+			break
+		}
+	}
+
 	var permissions []string
-	err = s.DB.Model(&models.UserRole{}).
-		Joins("JOIN role_permissions ON user_roles.role_id = role_permissions.role_id").
-		Where("user_roles.user_id = ?", userID).
-		Pluck("role_permissions.permission_code", &permissions).Error
+	if isSuperAdmin {
+		// 如果是超级管理员，加载所有权限
+		err = s.DB.Model(&models.Permission{}).
+			Pluck("code", &permissions).Error
+		fmt.Printf("超级管理员加载所有权限，权限数量: %d\n", len(permissions))
+	} else {
+		// 普通用户查询权限
+		err = s.DB.Model(&models.UserRole{}).
+			Joins("JOIN role_permissions ON user_roles.role_id = role_permissions.role_id").
+			Where("user_roles.user_id = ?", userID).
+			Pluck("role_permissions.permission_code", &permissions).Error
+	}
+
 	if err != nil {
-		// 记录查询权限失败的错误
 		fmt.Printf("查询用户权限失败，用户 ID: %s, 错误: %v\n", userID, err)
 		return nil, nil, fmt.Errorf("查询用户权限失败: %v", err)
 	}
-
-	// 记录查询到的权限
 	fmt.Printf("用户权限查询成功，用户 ID: %s, 权限: %v\n", userID, permissions)
 
 	return roles, permissions, nil

@@ -41,7 +41,6 @@ func NewUserController(userService services.UserService) *UserController {
 }
 
 // @Route(method=GET, path="users/me", middlewares=["jwt"])
-// @Permission(code="sys:user:me", name="获取当前用户信息", modules="个人中心", desc="获取当前登录用户的详细信息")
 func (c *UserController) Me(ctx *gin.Context) {
 	// 从上下文中获取用户 ID
 	userID := ctx.GetString("userID") // 或者使用 ctx.Get("userID")

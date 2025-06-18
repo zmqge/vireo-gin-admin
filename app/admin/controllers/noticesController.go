@@ -208,7 +208,6 @@ func (c *NoticesController) PublishNotice(ctx *gin.Context) {
 
 // 获取我的公告列表
 // @Route(method=GET, path="/notices/my-page", middlewares=["jwt","dataperm"])
-// @Permission(code="sys:notice:mynotice",name="我的公告列表",modules="Notices管理", desc="查看我的列表")
 func (c *NoticesController) GetMyNoticess(ctx *gin.Context) {
 	keywords := ctx.Query("keywords")
 	pageNumStr := ctx.DefaultQuery("pageNum", "1")
