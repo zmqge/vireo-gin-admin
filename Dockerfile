@@ -1,6 +1,11 @@
 # 使用官方Golang镜像作为构建环境
-FROM golang:1.19 AS builder
+FROM golang:1.23 AS builder
 
+# 设置 Go 环境变量
+ENV GOPROXY=https://goproxy.cn,direct \
+    GOSUMDB=off 
+    
+    
 # 设置工作目录
 WORKDIR /app
 
@@ -8,7 +13,8 @@ WORKDIR /app
 COPY go.mod go.sum ./ 
 
 # 下载依赖
-RUN go mod download
+RUN go mod tidy && \  
+    go mod download
 
 # 复制项目文件
 COPY . .
