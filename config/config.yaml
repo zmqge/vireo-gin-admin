@@ -28,4 +28,4 @@ controller_dirs:
   - app/admin
   # - app/test
 
-Demo_Mode: false
+Demo_Mode: true
