@@ -34,7 +34,7 @@ func Unauthorized(ctx *gin.Context, message string) {
 	})
 }
 
-//刷新token过期，返回402错误
+// 刷新token过期，返回402错误
 func RefresTokenExpired(c *gin.Context, msg string) {
 	c.JSON(402, gin.H{"code": 402, "msg": msg})
 }
@@ -42,4 +42,7 @@ func RefresTokenExpired(c *gin.Context, msg string) {
 // NotFound 返回404未找到错误
 func NotFound(c *gin.Context, msg string) {
 	c.JSON(404, gin.H{"code": 404, "msg": msg})
+}
+func DemoMode(c *gin.Context, msg string) {
+	c.JSON(403, gin.H{"code": 403, "msg": msg})
 }

@@ -2,10 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"time"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"github.com/spf13/viper"
 	"github.com/zmqge/vireo-gin-admin/config"
 	"github.com/zmqge/vireo-gin-admin/pkg/database"
 	"github.com/zmqge/vireo-gin-admin/pkg/middleware"
@@ -15,21 +16,6 @@ import (
 )
 
 func main() {
-	// 设置配置文件路径和名称
-	viper.SetConfigName("config")
-	viper.SetConfigType("yaml")
-	viper.AddConfigPath(".")
-	viper.AddConfigPath("./config") // 添加 config 目录作为配置文件搜索路径
-
-	// 读取配置文件
-	if err := viper.ReadInConfig(); err != nil {
-		fmt.Printf("Error reading config file: %s\n", err)
-		return
-	}
-
-	// 获取需要扫描的目录路径
-	controllerDirs := viper.GetStringSlice("controller_dirs")
-	fmt.Println("Controller directories to scan:", controllerDirs)
 
 	// 初始化日志
 	logger, _ := zap.NewProduction()
@@ -55,10 +41,24 @@ func main() {
 	})
 
 	// 应用全局中间件
+	log.Println("AllowedOrigins:", config.App.AllowedOrigins)
+	// r.Use(middleware.Cors())     // 跨域中间件
+	r.Use(cors.New(cors.Config{
+		// 允许所有来源，生产环境建议指定具体域名
+		AllowOrigins: config.App.AllowedOrigins,
+		// 允许的 HTTP 方法
+		AllowMethods: []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		// 允许的请求头
+		AllowHeaders: []string{"Origin", "Content-Type", "Authorization"},
+		// 是否允许携带凭证（如 Cookie）
+		AllowCredentials: true,
+		// 预检请求的缓存时间
+		MaxAge: 12 * time.Hour,
+	}))
 	r.Use(middleware.DemoMode())
 	r.Use(middleware.Logger())   // 日志中间件
 	r.Use(middleware.Recovery()) // 恢复中间件
-	r.Use(middleware.Cors())     // 跨域中间件
+
 	// 注册所有路由
 	routes.RegisterAllRoutes(r, db)
 

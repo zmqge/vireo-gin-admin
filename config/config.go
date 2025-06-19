@@ -40,6 +40,7 @@ type Config struct {
 	} `mapstructure:"RBAC"`
 	ControllerDirs []string `mapstructure:"CONTROLLER_DIRS"`
 	DemoMode       bool     `mapstructure:"DEMO_MODE"`
+	AllowedOrigins []string `mapstructure:"ALLOWED_ORIGINS"`
 }
 
 var App Config

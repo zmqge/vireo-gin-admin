@@ -29,3 +29,7 @@ controller_dirs:
   # - app/test
 
 Demo_Mode: true
+
+Allowed_Origins:
+  - "https://admin.zmqiang.com"
+  - "http://localhost:3000"
